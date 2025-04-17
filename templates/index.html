@@ -1,132 +1,111 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
   <title>Lovacia Bot</title>
-  <style>
-    body { max-width:600px; margin:auto; font-family:sans-serif; padding:2rem }
-    label { display:block; margin:1rem 0 }
-    #origPreview img, #imagePreview img { max-width:100px; margin:.25rem; border:1px solid #ccc }
-    #batchDownload { display:block; margin:1rem 0 }
-    #cancelBtn { margin-left:1rem; }
-  </style>
 </head>
 <body>
   <h1>Lovacia Bot</h1>
 
-  <form id="uploadForm" enctype="multipart/form-data">
-    <label>
-      Select images:
-      <input type="file" id="fileInput" name="files" multiple required>
-    </label>
-    <div id="origPreview"><strong>Original Thumbnails:</strong></div>
+  <label>
+    Select images:
+    <input id="fileInput" type="file" name="files" multiple>
+  </label>
+  <br>
 
-    <label>
-      Batch size:
-      <select name="count">
-        <option value="5">5</option>
-        <option value="10">10</option>
-        <option value="25">25</option>
-        <option value="50">50</option>
-      </select>
-    </label>
+  <!-- thumbnail of the *first* image while processing -->
+  <h3>Original Thumbnail:</h3>
+  <img id="origThumb" src="" width="200" style="display:none;" />
 
-    <label>
-      Contrast Min (%):
-      <input type="number" name="contrast_min" value="-5.0" step="0.1">
-    </label>
-    <label>
-      Contrast Max (%):
-      <input type="number" name="contrast_max" value="5.0" step="0.1">
-    </label>
-    <label>
-      Flip horizontally:
-      <input type="checkbox" name="flip">
-    </label>
+  <br><br>
+  <button id="uploadBtn">Upload & Process</button>
+  <button id="cancelBtn" style="display:none;">Cancel</button>
 
-    <button type="submit" id="uploadBtn">Upload & Process</button>
-    <button type="button" id="cancelBtn" style="display:none;">Cancel</button>
-  </form>
+  <h2>Progress:</h2>
+  <div id="progress">Idle</div>
 
-  <div id="preview">
-    <h2>Processed Images</h2>
-    <div id="imagePreview"></div>
-    <a id="batchDownload" href="#" download style="display:none">Download All Variations</a>
-  </div>
+  <h2>Processed Images</h2>
+  <div id="results"></div>
 
   <script>
-    // Show original thumbnails
-    const fileInput = document.getElementById("fileInput");
-    const origPreview = document.getElementById("origPreview");
-    fileInput.onchange = () => {
-      origPreview.innerHTML = "<strong>Original Thumbnails:</strong>";
-      Array.from(fileInput.files).forEach(file => {
-        const img = document.createElement("img");
-        img.src = URL.createObjectURL(file);
-        origPreview.appendChild(img);
-      });
-    };
+    const fileInput  = document.getElementById('fileInput');
+    const origThumb  = document.getElementById('origThumb');
+    const uploadBtn  = document.getElementById('uploadBtn');
+    const cancelBtn  = document.getElementById('cancelBtn');
+    const progress   = document.getElementById('progress');
+    const results    = document.getElementById('results');
 
-    // AbortController for cancellation
-    let controller;
-    const uploadBtn = document.getElementById("uploadBtn");
-    const cancelBtn = document.getElementById("cancelBtn");
-    const form = document.getElementById("uploadForm");
-    const preview = document.getElementById("imagePreview");
-    const batchLink = document.getElementById("batchDownload");
+    let controller;  // for cancellation
 
-    form.onsubmit = async e => {
-      e.preventDefault();
+    // 1) Show thumbnail on select
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (!file) {
+        origThumb.style.display = 'none';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = e => {
+        origThumb.src = e.target.result;
+        origThumb.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // 2) Start upload & processing
+    uploadBtn.addEventListener('click', async () => {
+      if (!fileInput.files.length) return alert('Pick at least one file.');
+
+      // reset UI
+      results.innerHTML = '';
+      progress.textContent = 'Starting…';
+      uploadBtn.disabled = true;
+      cancelBtn.style.display = '';
+
+      // Cancel token
       controller = new AbortController();
 
-      // hide upload, show cancel
-      uploadBtn.style.display = "none";
-      cancelBtn.style.display = "inline";
+      const form = new FormData();
+      for (const f of fileInput.files) form.append('files', f);
 
-      preview.innerHTML = "<p>Processing…</p>";
-      batchLink.style.display = "none";
-
-      const data = new FormData(form);
       try {
-        const res = await fetch("/upload", {
-          method: "POST",
-          body: data,
+        const resp = await fetch('/upload', {
+          method: 'POST',
+          body: form,
           signal: controller.signal
         });
-        const { processed, batch } = await res.json();
+        const data = await resp.json();
 
-        preview.innerHTML = "";
-        processed.forEach(item => {
-          const img = document.createElement("img");
-          img.src = item.image;
-          preview.appendChild(img);
-          const a = document.createElement("a");
-          a.href = item.download_link;
-          a.innerText = "Download";
-          a.target = "_blank";
-          preview.appendChild(a);
-          preview.appendChild(document.createElement("br"));
-        });
-
-        batchLink.href = batch;
-        batchLink.style.display = "block";
-
-      } catch (err) {
-        if (err.name === "AbortError") {
-          preview.innerHTML = "<p>Processing cancelled.</p>";
+        // when done
+        progress.textContent = `Done — ${data.processed.length} images`;
+        for (const img of data.processed) {
+          const a = document.createElement('a');
+          a.href = img.download_link;
+          a.download = '';
+          const i = document.createElement('img');
+          i.src = img.image;
+          i.width = 200;
+          a.appendChild(i);
+          results.appendChild(a);
+        }
+      }
+      catch (err) {
+        if (err.name === 'AbortError') {
+          progress.textContent = 'Cancelled by user';
         } else {
           console.error(err);
-          preview.innerHTML = "<p>Error occurred.</p>";
+          progress.textContent = 'Error!';
         }
-      } finally {
-        uploadBtn.style.display = "inline";
-        cancelBtn.style.display = "none";
       }
-    };
+      finally {
+        uploadBtn.disabled = false;
+        cancelBtn.style.display = 'none';
+      }
+    });
 
-    cancelBtn.onclick = () => {
+    // 3) Cancel button
+    cancelBtn.addEventListener('click', () => {
       if (controller) controller.abort();
-    };
+    });
   </script>
 </body>
 </html>
