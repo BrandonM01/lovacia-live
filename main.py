@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, UploadFile, File
+from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -6,13 +6,16 @@ import shutil
 import os
 from PIL import Image, ImageEnhance
 import random
+from fastapi import Request
 
 app = FastAPI()
 
 # Serve HTML templates
 templates = Jinja2Templates(directory="templates")
-# Serve static files (for CSS/logo if needed)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Serve static files (for CSS/logo if needed)
+os.makedirs("static", exist_ok=True)
 
 # Route: Home page
 @app.get("/", response_class=HTMLResponse)
@@ -27,35 +30,41 @@ async def upload_images(files: list[UploadFile] = File(...)):
 
     saved_files = []
     processed_files = []
-    
+
     for file in files:
         file_path = os.path.join(upload_dir, file.filename)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        saved_files.append(file.filename)
+        with open(file_path, "wb") as f:
+            f.write(await file.read())
 
-        # Open the image using Pillow (PIL)
-        image = Image.open(file_path)
-        
-        # Resize the image slightly
-        new_size = tuple([int(i * 0.98) for i in image.size])  # Reduce size by 2%
-        image = image.resize(new_size)
+        saved_files.append(file_path)
 
-        # Rotate the image by a random degree
-        angle = random.randint(-5, 5)  # Rotate by a random angle between -5 to 5 degrees
-        image = image.rotate(angle)
-
-        # Adjust contrast slightly
-        enhancer = ImageEnhance.Contrast(image)
-        image = enhancer.enhance(random.uniform(0.95, 1.05))  # Random contrast change between 95%-105%
-
-        # Save the processed image with a modified name
-        processed_filename = f"processed_{file.filename}"
-        processed_path = os.path.join(upload_dir, processed_filename)
-        image.save(processed_path)
+        # Process the image
+        processed_image_path = process_image(file_path)
         processed_files.append({
-            "image": f"/uploads/{processed_filename}",  # URL for preview
-            "download_link": f"/uploads/{processed_filename}"  # URL for download
+            "image": f"/uploads/{os.path.basename(processed_image_path)}",
+            "download_link": f"/uploads/{os.path.basename(processed_image_path)}"
         })
 
     return {"uploaded": saved_files, "processed": processed_files}
+
+# Process Image Function
+def process_image(file_path: str) -> str:
+    try:
+        # Open the image
+        img = Image.open(file_path)
+
+        # Enhance the image (example: convert to black and white)
+        enhancer = ImageEnhance.Contrast(img)
+        img = enhancer.enhance(2)
+
+        # Generate a random name for the processed image
+        processed_file_name = f"processed_{random.randint(1000, 9999)}.jpg"
+        processed_path = os.path.join("static", processed_file_name)
+
+        # Save the processed image
+        img.save(processed_path)
+        return processed_path
+
+    except Exception as e:
+        print(f"Error processing image: {e}")
+        return file_path
