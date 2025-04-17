@@ -29,11 +29,20 @@
       const imagePreview = document.getElementById("imagePreview");
       imagePreview.innerHTML = "";  // Clear any previous images
 
-      data.processed.forEach((imagePath) => {
+      data.processed.forEach((imageData) => {
+        // Image preview
         const img = document.createElement("img");
-        img.src = imagePath;  // URL of the processed image
+        img.src = imageData.image;  // URL of the processed image
         img.style.width = "200px";  // Resize the preview
         imagePreview.appendChild(img);
+
+        // Create a download link for the processed image
+        const downloadLink = document.createElement("a");
+        downloadLink.href = imageData.download_link;
+        downloadLink.innerText = "Download Processed Image";
+        downloadLink.download = imageData.download_link.split('/').pop();  // Set filename from URL
+        imagePreview.appendChild(downloadLink);
+        imagePreview.appendChild(document.createElement("br"));  // Add line break after each link
       });
     };
   </script>
