@@ -1,50 +1,54 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Lovacia Bot</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lovacia Bot</title>
 </head>
 <body>
-  <h1>Upload Your Images</h1>
-  <form action="/upload" method="post" enctype="multipart/form-data">
-    <input type="file" name="files" multiple>
-    <button type="submit">Upload</button>
-  </form>
+    <h1>Upload Your Images</h1>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <input type="file" name="files" multiple>
+        <button type="submit">Upload</button>
+    </form>
 
-  <div id="preview">
-    <h2>Processed Images</h2>
-    <div id="imagePreview"></div>
-  </div>
+    <div id="preview">
+        <h2>Processed Images</h2>
+        <div id="imagePreview"></div>
+    </div>
 
-  <script>
-    // Handle form submission and preview
-    document.querySelector("form").onsubmit = async function (event) {
-      event.preventDefault();
-      let formData = new FormData(this);
-      let response = await fetch("/upload", {
-        method: "POST",
-        body: formData
-      });
+    <script>
+        // Handle form submission and preview
+        document.querySelector("form").onsubmit = async function(event) {
+            event.preventDefault();
 
-      let data = await response.json();
-      const imagePreview = document.getElementById("imagePreview");
-      imagePreview.innerHTML = "";  // Clear any previous images
+            let formData = new FormData(this);
+            let response = await fetch("/upload", {
+                method: "POST",
+                body: formData
+            });
 
-      data.processed.forEach((imageData) => {
-        // Image preview
-        const img = document.createElement("img");
-        img.src = imageData.image;  // URL of the processed image
-        img.style.width = "200px";  // Resize the preview
-        imagePreview.appendChild(img);
+            let data = await response.json();
+            let imagePreview = document.getElementById("imagePreview");
+            imagePreview.innerHTML = ""; // Clear any previous images
 
-        // Create a download link for the processed image
-        const downloadLink = document.createElement("a");
-        downloadLink.href = imageData.download_link;
-        downloadLink.innerText = "Download Processed Image";
-        downloadLink.download = imageData.download_link.split('/').pop();  // Set filename from URL
-        imagePreview.appendChild(downloadLink);
-        imagePreview.appendChild(document.createElement("br"));  // Add line break after each link
-      });
-    };
-  </script>
+            data.processed.forEach((imageData) => {
+                // Image preview
+                const img = document.createElement("img");
+                img.src = imageData.image;
+                img.alt = "Processed Image";
+                img.width = 200;
+
+                const downloadLink = document.createElement("a");
+                downloadLink.href = imageData.download_link;
+                downloadLink.innerText = "Download Processed Image";
+                downloadLink.target = "_blank"; // Open in a new tab
+
+                imagePreview.appendChild(img);
+                imagePreview.appendChild(downloadLink);
+                imagePreview.appendChild(document.createElement("br"));
+            });
+        };
+    </script>
 </body>
 </html>
