@@ -10,53 +10,31 @@
       font-family: sans-serif;
       padding: 2rem;
     }
-    label {
-      display: block;
-      margin: 1rem 0;
-    }
-    /* Original thumbnails */
-    #origPreview img {
+    label { display: block; margin: 1rem 0; }
+    #origPreview img,
+    #imagePreview img {
       max-width: 100px;
       margin: .25rem;
       border: 1px solid #ccc;
     }
-    /* Processed images: horizontal row */
     #imagePreview {
       display: flex;
       flex-wrap: wrap;
       gap: .5rem;
-      margin-top: .5rem;
     }
-    #imagePreview img {
-      max-width: 120px;
-      border: 1px solid #999;
+    .proc {
+      text-align: center;
     }
-    /* Batch download link */
-    #batchDownload {
+    .proc input {
+      display: block;
+      margin: .25rem auto;
+    }
+    #batchDownload,
+    #downloadSelected {
       display: block;
       margin: 1rem 0;
     }
-    /* History gallery */
-    #history {
-      margin-top: 2rem;
-    }
-    #history h2 {
-      margin-bottom: .5rem;
-    }
-    .batch {
-      margin-bottom: 1.5rem;
-      padding: .5rem;
-      border-top: 1px solid #ddd;
-    }
-    .batch h3 {
-      font-size: 1rem;
-      margin: .5rem 0;
-    }
-    .batch img {
-      max-width: 80px;
-      margin: .25rem;
-      border: 1px dashed #bbb;
-    }
+    #cancelBtn { margin-left:1rem; }
   </style>
 </head>
 <body>
@@ -67,7 +45,6 @@
       Select images:
       <input type="file" id="fileInput" name="files" multiple required>
     </label>
-
     <div id="origPreview"><strong>Original Thumbnails:</strong></div>
 
     <label>
@@ -79,7 +56,6 @@
         <option value="50">50</option>
       </select>
     </label>
-
     <label>
       Contrast Min (%):
       <input type="number" name="contrast_min" value="-5.0" step="0.1">
@@ -100,18 +76,14 @@
   <div id="preview">
     <h2>Processed Images</h2>
     <div id="imagePreview"></div>
+    <button id="downloadSelected" style="display:none;">Download Selected</button>
     <a id="batchDownload" href="#" download style="display:none">Download All Variations (ZIP)</a>
   </div>
 
-  <div id="history">
-    <h2>Previous Batches</h2>
-    <!-- new batches will be appended here -->
-  </div>
-
   <script>
-    // Show original thumbnails
-    const fileInput = document.getElementById("fileInput");
-    const origPreview = document.getElementById("origPreview");
+    // show the originals
+    const fileInput    = document.getElementById("fileInput");
+    const origPreview  = document.getElementById("origPreview");
     fileInput.onchange = () => {
       origPreview.innerHTML = "<strong>Original Thumbnails:</strong>";
       Array.from(fileInput.files).forEach(file => {
@@ -121,24 +93,24 @@
       });
     };
 
-    // Set up upload/cancel buttons
+    // controls
     let controller;
-    const uploadBtn = document.getElementById("uploadBtn");
-    const cancelBtn = document.getElementById("cancelBtn");
-    const form = document.getElementById("uploadForm");
-    const preview = document.getElementById("imagePreview");
-    const batchLink = document.getElementById("batchDownload");
-    const historyDiv = document.getElementById("history");
+    const uploadBtn      = document.getElementById("uploadBtn");
+    const cancelBtn      = document.getElementById("cancelBtn");
+    const form           = document.getElementById("uploadForm");
+    const preview        = document.getElementById("imagePreview");
+    const batchLink      = document.getElementById("batchDownload");
+    const downloadSelBtn = document.getElementById("downloadSelected");
 
     form.onsubmit = async e => {
       e.preventDefault();
       controller = new AbortController();
 
-      uploadBtn.style.display = "none";
-      cancelBtn.style.display = "inline";
-
-      preview.innerHTML = "<p>Processing…</p>";
-      batchLink.style.display = "none";
+      uploadBtn.style.display      = "none";
+      cancelBtn.style.display      = "inline";
+      downloadSelBtn.style.display = "none";
+      batchLink.style.display      = "none";
+      preview.innerHTML            = "<p>Processing…</p>";
 
       const data = new FormData(form);
       try {
@@ -149,57 +121,54 @@
         });
         const { processed, batch } = await res.json();
 
-        // 1) Save this batch into history
-        const hist = document.createElement("div");
-        hist.className = "batch";
-        hist.innerHTML = `<h3>Batch @ ${new Date().toLocaleString()}</h3>`;
-        processed.forEach(item => {
-          const img = document.createElement("img");
-          img.src = item.image;
-          hist.appendChild(img);
-        });
-        const histDownload = document.createElement("a");
-        histDownload.href = batch;
-        histDownload.innerText = "Download ZIP";
-        histDownload.target = "_blank";
-        histDownload.style.display = "block";
-        hist.appendChild(histDownload);
-        historyDiv.appendChild(hist);
-
-        // 2) Render current batch
+        // render processed images with checkboxes
         preview.innerHTML = "";
         processed.forEach(item => {
+          const wrap = document.createElement("div");
+          wrap.className = "proc";
+
+          const chk = document.createElement("input");
+          chk.type  = "checkbox";
+          chk.value = item.download_link;
+          wrap.appendChild(chk);
+
           const img = document.createElement("img");
           img.src = item.image;
-          preview.appendChild(img);
+          wrap.appendChild(img);
 
-          const a = document.createElement("a");
-          a.href = item.download_link;
-          a.innerText = "Download";
-          a.target = "_blank";
-          preview.appendChild(a);
-          preview.appendChild(document.createElement("br"));
+          preview.appendChild(wrap);
         });
 
+        // show our download buttons
+        downloadSelBtn.style.display = "block";
         batchLink.href = batch;
         batchLink.style.display = "block";
 
       } catch (err) {
-        if (err.name === "AbortError") {
-          preview.innerHTML = "<p>Processing cancelled.</p>";
-        } else {
-          console.error(err);
-          preview.innerHTML = "<p>Error occurred.</p>";
-        }
+        preview.innerHTML = err.name === "AbortError"
+          ? "<p>Processing cancelled.</p>"
+          : "<p>Error occurred.</p>";
       } finally {
         uploadBtn.style.display = "inline";
         cancelBtn.style.display = "none";
       }
     };
 
-    // Cancel in‑flight upload
     cancelBtn.onclick = () => {
       if (controller) controller.abort();
+    };
+
+    // Download selected images
+    downloadSelBtn.onclick = () => {
+      const checks = preview.querySelectorAll("input[type=checkbox]:checked");
+      checks.forEach(chk => {
+        const a = document.createElement("a");
+        a.href = chk.value;
+        a.download = "";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      });
     };
   </script>
 </body>
