@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8">
   <title>Lovacia Bot</title>
 </head>
 <body>
@@ -8,17 +9,13 @@
 
   <label>
     Select images:
-    <input id="fileInput" type="file" name="files" multiple>
+    <input id="fileInput" type="file" multiple>
   </label>
-  <br>
-
-  <!-- thumbnail of the *first* image while processing -->
-  <h3>Original Thumbnail:</h3>
-  <img id="origThumb" src="" width="200" style="display:none;" />
-
-  <br><br>
   <button id="uploadBtn">Upload & Process</button>
-  <button id="cancelBtn" style="display:none;">Cancel</button>
+  <button id="cancelBtn" style="display:none">Cancel</button>
+
+  <h3>Original Thumbnail:</h3>
+  <img id="origThumb" width="200" style="display:none">
 
   <h2>Progress:</h2>
   <div id="progress">Idle</div>
@@ -27,57 +24,50 @@
   <div id="results"></div>
 
   <script>
-    const fileInput  = document.getElementById('fileInput');
-    const origThumb  = document.getElementById('origThumb');
-    const uploadBtn  = document.getElementById('uploadBtn');
-    const cancelBtn  = document.getElementById('cancelBtn');
-    const progress   = document.getElementById('progress');
-    const results    = document.getElementById('results');
+    const fileInput = document.getElementById('fileInput');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const origThumb = document.getElementById('origThumb');
+    const progress  = document.getElementById('progress');
+    const results   = document.getElementById('results');
 
-    let controller;  // for cancellation
+    let controller;
 
-    // 1) Show thumbnail on select
-    fileInput.addEventListener('change', () => {
-      const file = fileInput.files[0];
-      if (!file) {
-        origThumb.style.display = 'none';
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = e => {
+    // show thumb
+    fileInput.onchange = () => {
+      const f = fileInput.files[0];
+      if (!f) return origThumb.style.display = 'none';
+      const r = new FileReader();
+      r.onload = e => {
         origThumb.src = e.target.result;
         origThumb.style.display = 'block';
       };
-      reader.readAsDataURL(file);
-    });
+      r.readAsDataURL(f);
+    };
 
-    // 2) Start upload & processing
-    uploadBtn.addEventListener('click', async () => {
+    uploadBtn.onclick = async () => {
       if (!fileInput.files.length) return alert('Pick at least one file.');
 
-      // reset UI
+      // UI prep
       results.innerHTML = '';
       progress.textContent = 'Starting…';
       uploadBtn.disabled = true;
       cancelBtn.style.display = '';
 
-      // Cancel token
       controller = new AbortController();
-
       const form = new FormData();
       for (const f of fileInput.files) form.append('files', f);
 
       try {
-        const resp = await fetch('/upload', {
+        const res = await fetch('/upload', {
           method: 'POST',
-          body: form,
+          body:   form,
           signal: controller.signal
         });
-        const data = await resp.json();
+        const json = await res.json();
 
-        // when done
-        progress.textContent = `Done — ${data.processed.length} images`;
-        for (const img of data.processed) {
+        progress.textContent = `Done — ${json.processed.length} images`;
+        for (const img of json.processed) {
           const a = document.createElement('a');
           a.href = img.download_link;
           a.download = '';
@@ -87,25 +77,21 @@
           a.appendChild(i);
           results.appendChild(a);
         }
-      }
-      catch (err) {
-        if (err.name === 'AbortError') {
-          progress.textContent = 'Cancelled by user';
-        } else {
+      } catch (err) {
+        if (err.name === 'AbortError') progress.textContent = 'Cancelled';
+        else {
           console.error(err);
           progress.textContent = 'Error!';
         }
-      }
-      finally {
+      } finally {
         uploadBtn.disabled = false;
         cancelBtn.style.display = 'none';
       }
-    });
+    };
 
-    // 3) Cancel button
-    cancelBtn.addEventListener('click', () => {
+    cancelBtn.onclick = () => {
       if (controller) controller.abort();
-    });
+    };
   </script>
 </body>
 </html>
