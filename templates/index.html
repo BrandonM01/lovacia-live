@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>Lovacia Bot</title>
@@ -24,74 +24,73 @@
   <div id="results"></div>
 
   <script>
-    const fileInput = document.getElementById('fileInput');
-    const uploadBtn = document.getElementById('uploadBtn');
-    const cancelBtn = document.getElementById('cancelBtn');
-    const origThumb = document.getElementById('origThumb');
-    const progress  = document.getElementById('progress');
-    const results   = document.getElementById('results');
-
+    const fileInput  = document.getElementById("fileInput");
+    const uploadBtn  = document.getElementById("uploadBtn");
+    const cancelBtn  = document.getElementById("cancelBtn");
+    const origThumb  = document.getElementById("origThumb");
+    const progressEl = document.getElementById("progress");
+    const resultsEl  = document.getElementById("results");
     let controller;
 
-    // show thumb
-    fileInput.onchange = () => {
-      const f = fileInput.files[0];
-      if (!f) return origThumb.style.display = 'none';
-      const r = new FileReader();
-      r.onload = e => {
-        origThumb.src = e.target.result;
-        origThumb.style.display = 'block';
-      };
-      r.readAsDataURL(f);
-    };
+    uploadBtn.addEventListener("click", async () => {
+      const files = fileInput.files;
+      if (!files.length) {
+        return alert("Please select at least one image.");
+      }
 
-    uploadBtn.onclick = async () => {
-      if (!fileInput.files.length) return alert('Pick at least one file.');
-
-      // UI prep
-      results.innerHTML = '';
-      progress.textContent = 'Starting…';
-      uploadBtn.disabled = true;
-      cancelBtn.style.display = '';
-
+      // prepare for upload
       controller = new AbortController();
-      const form = new FormData();
-      for (const f of fileInput.files) form.append('files', f);
+      uploadBtn.disabled = true;
+      cancelBtn.style.display = "inline";
+      progressEl.innerText = "Processing...";
+      resultsEl.innerHTML = "";
+
+      // show the first thumbnail
+      origThumb.src = URL.createObjectURL(files[0]);
+      origThumb.style.display = "block";
 
       try {
-        const res = await fetch('/upload', {
-          method: 'POST',
-          body:   form,
+        const formData = new FormData();
+        for (const f of files) formData.append("files", f);
+
+        const res = await fetch("/upload", {
+          method: "POST",
+          body: formData,
           signal: controller.signal
         });
-        const json = await res.json();
+        if (!res.ok) throw new Error(`Status ${res.status}`);
 
-        progress.textContent = `Done — ${json.processed.length} images`;
-        for (const img of json.processed) {
-          const a = document.createElement('a');
-          a.href = img.download_link;
-          a.download = '';
-          const i = document.createElement('img');
-          i.src = img.image;
-          i.width = 200;
-          a.appendChild(i);
-          results.appendChild(a);
-        }
+        const data = await res.json();
+        data.processed.forEach(imgObj => {
+          const a = document.createElement("a");
+          a.href = imgObj.download_link;
+          a.target = "_blank";
+
+          const img = document.createElement("img");
+          img.src = imgObj.image;
+          img.width = 200;
+          a.appendChild(img);
+
+          resultsEl.appendChild(a);
+        });
+
+        progressEl.innerText = "Done!";
       } catch (err) {
-        if (err.name === 'AbortError') progress.textContent = 'Cancelled';
-        else {
+        if (err.name === "AbortError") {
+          progressEl.innerText = "Canceled.";
+        } else {
           console.error(err);
-          progress.textContent = 'Error!';
+          progressEl.innerText = "Error.";
         }
       } finally {
         uploadBtn.disabled = false;
-        cancelBtn.style.display = 'none';
+        cancelBtn.style.display = "none";
       }
-    };
+    });
 
-    cancelBtn.onclick = () => {
+    cancelBtn.addEventListener("click", () => {
       if (controller) controller.abort();
-    };
+    });
   </script>
 </body>
 </html>
