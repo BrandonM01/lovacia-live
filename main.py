@@ -7,21 +7,27 @@ from PIL import Image, ImageEnhance
 
 app = FastAPI()
 
-# HEAD / for health checks
+# HEAD / for Render health checks
 @app.head("/")
 async def healthcheck():
     return Response(status_code=200)
 
-# Templates & static mounts
+# Serve HTML templates
 templates = Jinja2Templates(directory="templates")
+
+# Ensure and mount static/ at /static
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Ensure and mount uploads/ at /uploads
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
+
 
 @app.post("/upload")
 async def upload_images(
@@ -36,7 +42,7 @@ async def upload_images(
     all_processed = []
 
     # minimum thresholds
-    min_contrast = 0.1
+    min_contrast = 0.3   # ← raised from 0.1
     min_rotation = 0.54
     min_crop     = 0.01
 
@@ -60,7 +66,7 @@ async def upload_images(
             if await request.is_disconnected():
                 break
 
-            # ---- FIXED: sample crop between min_crop and crop_range ----
+            # pick a unique combo
             while True:
                 a = random.uniform(-rot_range, rot_range)
                 if abs(a) < min_rotation:
@@ -70,10 +76,12 @@ async def upload_images(
                 if abs(c) < min_contrast:
                     continue
 
-                cp = random.uniform(min_crop, crop_range)
+                cp = random.uniform(0, crop_range)
+                if cp < min_crop:
+                    continue
 
                 flip_flag = random.choice([True, False]) if flip else False
-                key = (round(a, 2), round(c, 2), round(cp, 4), flip_flag)
+                key = (round(a, 2), round(c, 2), round(cp, 3), flip_flag)
                 if key not in seen:
                     seen.add(key)
                     break
