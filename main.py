@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import os, zipfile, random
@@ -7,12 +7,19 @@ from PIL import Image, ImageEnhance
 
 app = FastAPI()
 
-# templates + static
+# HEAD / for Render health checks
+@app.head("/")
+async def healthcheck():
+    return Response(status_code=200)
+
+# Serve HTML templates
 templates = Jinja2Templates(directory="templates")
+
+# Ensure and mount static/ at /static
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# ensure + mount uploads
+# Ensure and mount uploads/ at /uploads
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
@@ -101,7 +108,6 @@ async def upload_images(
             for fn in variants:
                 zf.write(os.path.join(upload_dir, fn), arcname=fn)
 
-        # send back only the last batch URL (we assume one file at a time)
         batch_url = f"/uploads/{zip_name}"
 
     return {"processed": all_processed, "batch": batch_url}
