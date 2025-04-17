@@ -7,27 +7,21 @@ from PIL import Image, ImageEnhance
 
 app = FastAPI()
 
-# HEAD / for Render health checks
+# HEAD / for health checks
 @app.head("/")
 async def healthcheck():
     return Response(status_code=200)
 
-# Serve HTML templates
+# Templates & static mounts
 templates = Jinja2Templates(directory="templates")
-
-# Ensure and mount static/ at /static
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# Ensure and mount uploads/ at /uploads
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
-
 
 @app.post("/upload")
 async def upload_images(
@@ -66,7 +60,7 @@ async def upload_images(
             if await request.is_disconnected():
                 break
 
-            # pick a unique combo
+            # ---- FIXED: sample crop between min_crop and crop_range ----
             while True:
                 a = random.uniform(-rot_range, rot_range)
                 if abs(a) < min_rotation:
@@ -76,12 +70,10 @@ async def upload_images(
                 if abs(c) < min_contrast:
                     continue
 
-                cp = random.uniform(0, crop_range)
-                if cp < min_crop:
-                    continue
+                cp = random.uniform(min_crop, crop_range)
 
                 flip_flag = random.choice([True, False]) if flip else False
-                key = (round(a, 2), round(c, 2), round(cp, 3), flip_flag)
+                key = (round(a, 2), round(c, 2), round(cp, 4), flip_flag)
                 if key not in seen:
                     seen.add(key)
                     break
