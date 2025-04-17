@@ -1,54 +1,60 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lovacia Bot</title>
+  <title>Lovacia Bot</title>
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-    <h1>Upload Your Images</h1>
-    <form action="/upload" method="post" enctype="multipart/form-data">
-        <input type="file" name="files" multiple>
-        <button type="submit">Upload</button>
-    </form>
+  <h1>Upload Your Images</h1>
+  <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
+    <input type="file" name="files" multiple>
+    &nbsp;&nbsp;
+    <label>
+      Variations:
+      <input type="number" name="count" value="1" min="1" max="20" style="width:4em">
+    </label>
+    &nbsp;&nbsp;
+    <button type="submit">Upload</button>
+  </form>
 
-    <div id="preview">
-        <h2>Processed Images</h2>
-        <div id="imagePreview"></div>
-    </div>
+  <div id="preview">
+    <h2>Processed Images</h2>
+    <div id="imagePreview"></div>
+  </div>
 
-    <script>
-        // Handle form submission and preview
-        document.querySelector("form").onsubmit = async function(event) {
-            event.preventDefault();
+  <script>
+  document.getElementById("uploadForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const data = new FormData(form);
 
-            let formData = new FormData(this);
-            let response = await fetch("/upload", {
-                method: "POST",
-                body: formData
-            });
+    // show a quick “loading…”
+    const preview = document.getElementById("imagePreview");
+    preview.innerHTML = "<em>Processing…</em>";
 
-            let data = await response.json();
-            let imagePreview = document.getElementById("imagePreview");
-            imagePreview.innerHTML = ""; // Clear any previous images
+    const res = await fetch("/upload", {
+      method: "POST",
+      body: data
+    });
+    const payload = await res.json();
 
-            data.processed.forEach((imageData) => {
-                // Image preview
-                const img = document.createElement("img");
-                img.src = imageData.image;
-                img.alt = "Processed Image";
-                img.width = 200;
+    // clear & render each processed image + link
+    preview.innerHTML = "";
+    payload.processed.forEach(item => {
+      const img = document.createElement("img");
+      img.src = item.image;
+      img.style.maxWidth = "200px";
+      img.style.margin = "0.5em";
+      preview.appendChild(img);
 
-                const downloadLink = document.createElement("a");
-                downloadLink.href = imageData.download_link;
-                downloadLink.innerText = "Download Processed Image";
-                downloadLink.target = "_blank"; // Open in a new tab
-
-                imagePreview.appendChild(img);
-                imagePreview.appendChild(downloadLink);
-                imagePreview.appendChild(document.createElement("br"));
-            });
-        };
-    </script>
+      const a = document.createElement("a");
+      a.href = item.download_link;
+      a.innerText = "Download";
+      a.target = "_blank";
+      preview.appendChild(a);
+      preview.appendChild(document.createElement("br"));
+    });
+  };
+  </script>
 </body>
 </html>
