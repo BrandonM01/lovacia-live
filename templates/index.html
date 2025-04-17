@@ -11,6 +11,32 @@
     Select images:
     <input id="fileInput" type="file" multiple>
   </label>
+
+  <!-- Customisation controls: -->
+  <div>
+    <label>
+      Batch size:
+      <select id="batchSize">
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="25">25</option>
+        <option value="50">50</option>
+      </select>
+    </label>
+    <label>
+      Contrast Min (%):
+      <input id="contrastMin" type="number" step="0.1" value="-5">
+    </label>
+    <label>
+      Contrast Max (%):
+      <input id="contrastMax" type="number" step="0.1" value="5">
+    </label>
+    <label>
+      Flip horizontally:
+      <input id="flip" type="checkbox">
+    </label>
+  </div>
+
   <button id="uploadBtn">Upload & Process</button>
   <button id="cancelBtn" style="display:none">Cancel</button>
 
@@ -24,53 +50,58 @@
   <div id="results"></div>
 
   <script>
-    const fileInput  = document.getElementById("fileInput");
-    const uploadBtn  = document.getElementById("uploadBtn");
-    const cancelBtn  = document.getElementById("cancelBtn");
-    const origThumb  = document.getElementById("origThumb");
-    const progressEl = document.getElementById("progress");
-    const resultsEl  = document.getElementById("results");
+    const fileInput   = document.getElementById("fileInput");
+    const batchSize   = document.getElementById("batchSize");
+    const contrastMin = document.getElementById("contrastMin");
+    const contrastMax = document.getElementById("contrastMax");
+    const flipToggle  = document.getElementById("flip");
+    const uploadBtn   = document.getElementById("uploadBtn");
+    const cancelBtn   = document.getElementById("cancelBtn");
+    const origThumb   = document.getElementById("origThumb");
+    const progressEl  = document.getElementById("progress");
+    const resultsEl   = document.getElementById("results");
     let controller;
 
     uploadBtn.addEventListener("click", async () => {
-      const files = fileInput.files;
-      if (!files.length) {
-        return alert("Please select at least one image.");
-      }
+      const files = Array.from(fileInput.files);
+      if (!files.length) return alert("Select at least one file");
 
-      // prepare for upload
-      controller = new AbortController();
+      // disable + show cancel
       uploadBtn.disabled = true;
       cancelBtn.style.display = "inline";
-      progressEl.innerText = "Processing...";
+      progressEl.innerText = "Processing…";
       resultsEl.innerHTML = "";
 
-      // show the first thumbnail
+      // show first thumbnail
       origThumb.src = URL.createObjectURL(files[0]);
       origThumb.style.display = "block";
 
-      try {
-        const formData = new FormData();
-        for (const f of files) formData.append("files", f);
+      // build form
+      const form = new FormData();
+      form.append("batch_size", batchSize.value);
+      form.append("contrast_min", contrastMin.value);
+      form.append("contrast_max", contrastMax.value);
+      form.append("flip", flipToggle.checked);
+      files.forEach(f => form.append("files", f));
 
+      controller = new AbortController();
+      try {
         const res = await fetch("/upload", {
           method: "POST",
-          body: formData,
+          body: form,
           signal: controller.signal
         });
-        if (!res.ok) throw new Error(`Status ${res.status}`);
+        if (!res.ok) throw new Error(res.statusText);
 
-        const data = await res.json();
-        data.processed.forEach(imgObj => {
+        const { processed } = await res.json();
+        processed.forEach(imgObj => {
           const a = document.createElement("a");
           a.href = imgObj.download_link;
           a.target = "_blank";
-
           const img = document.createElement("img");
           img.src = imgObj.image;
           img.width = 200;
           a.appendChild(img);
-
           resultsEl.appendChild(a);
         });
 
