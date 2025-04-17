@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Request
+from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -7,15 +7,13 @@ import os, random
 
 app = FastAPI()
 
-# ensure our dirs exist
+# ensure our dirs
 os.makedirs("static", exist_ok=True)
 os.makedirs("uploads", exist_ok=True)
 
-# mount those dirs so FastAPI can serve the images
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# set up Jinja2
 templates = Jinja2Templates(directory="templates")
 
 
@@ -25,22 +23,32 @@ async def home(request: Request):
 
 
 @app.post("/upload")
-async def upload_images(files: list[UploadFile] = File(...)):
+async def upload_images(
+    batch_size:    int     = Form(5),
+    contrast_min:  float   = Form(-5.0),
+    contrast_max:  float   = Form(5.0),
+    flip:          bool    = Form(False),
+    files:         list[UploadFile] = File(...)
+):
     processed = []
 
-    for upload in files:
-        # 1) save original
+    # only process up to batch_size
+    for upload in files[:batch_size]:
+        # save original
         orig_path = os.path.join("uploads", upload.filename)
         with open(orig_path, "wb") as f:
             f.write(await upload.read())
 
-        # 2) open + apply a random subtle contrast tweak
+        # open + apply contrast
         img = Image.open(orig_path)
-        factor = random.uniform(0.9, 1.1)  # subtle: ±10%
+        factor = random.uniform(contrast_min, contrast_max) / 100 + 1  # map % → factor
         img = ImageEnhance.Contrast(img).enhance(factor)
 
-        # 3) save processed copy under static/
-        base, ext = os.path.splitext(upload.filename)
+        if flip:
+            img = img.transpose(Image.FLIP_LEFT_RIGHT)
+
+        # save out
+        base, _ = os.path.splitext(upload.filename)
         out_name = f"{base}_{random.randint(1000,9999)}.jpg"
         out_path = os.path.join("static", out_name)
         img.save(out_path, "JPEG")
