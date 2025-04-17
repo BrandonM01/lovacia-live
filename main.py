@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, Request
+from fastapi import FastAPI, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -7,7 +7,7 @@ import os, random
 
 app = FastAPI()
 
-# ensure our dirs
+# ensure directories
 os.makedirs("static", exist_ok=True)
 os.makedirs("uploads", exist_ok=True)
 
@@ -32,22 +32,17 @@ async def upload_images(
 ):
     processed = []
 
-    # only process up to batch_size
     for upload in files[:batch_size]:
-        # save original
         orig_path = os.path.join("uploads", upload.filename)
         with open(orig_path, "wb") as f:
             f.write(await upload.read())
 
-        # open + apply contrast
         img = Image.open(orig_path)
-        factor = random.uniform(contrast_min, contrast_max) / 100 + 1  # map % → factor
+        factor = random.uniform(contrast_min, contrast_max) / 100 + 1
         img = ImageEnhance.Contrast(img).enhance(factor)
-
         if flip:
             img = img.transpose(Image.FLIP_LEFT_RIGHT)
 
-        # save out
         base, _ = os.path.splitext(upload.filename)
         out_name = f"{base}_{random.randint(1000,9999)}.jpg"
         out_path = os.path.join("static", out_name)
