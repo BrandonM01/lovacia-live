@@ -4,37 +4,44 @@
   <meta charset="UTF-8">
   <title>Lovacia Bot</title>
   <style>
-    body { max-width: 640px; margin: auto; font-family: sans-serif; padding: 1rem; }
-    label { display: block; margin: 0.5rem 0; }
-    input[type=range] { width: 100%; }
-    #imagePreview img { max-width: 150px; margin: 0.25rem; border: 1px solid #ccc; }
-    #batchDownload { display: block; margin: 1rem 0; }
+    body { max-width:600px; margin:auto; font-family:sans-serif; padding:2rem }
+    label { display:block; margin:.75rem 0 }
+    input[type=range] { width:80%; vertical-align:middle }
+    input[type=number] { width:4em; vertical-align:middle; margin-left:.5em }
+    #imagePreview img { max-width:150px; margin:.25rem; border:1px solid #ccc }
+    #batchDownload { display:block; margin:1rem 0 }
   </style>
 </head>
 <body>
   <h1>Lovacia Bot</h1>
-
   <form id="uploadForm" enctype="multipart/form-data">
     <label>
       Select images:
       <input type="file" name="files" multiple required>
     </label>
-    <label>
-      Variations:
-      <input type="number" name="count" value="1" min="1" max="20" style="width: 4em">
-    </label>
 
     <label>
-      Contrast: <span id="contrastVal">1.00</span>
-      <input type="range" name="contrast" id="contrast" min="0.50" max="1.50" step="0.01" value="1.00">
+      Variations:
+      <input type="number" name="count" value="1" min="1" max="20">
     </label>
+
+    <!-- Contrast slider + manual input -->
     <label>
-      Rotation: <span id="rotationVal">0°</span>
-      <input type="range" name="rotation" id="rotation" min="-10" max="10" step="1" value="0">
+      Contrast:
+      <input type="range" name="contrast" id="contrast" min="0" max="1.5" step="0.01" value="1.02">
+      <input type="number" id="contrastInput" min="0" max="1.5" step="0.01" value="1.02">
     </label>
+
+    <!-- Rotation slider -->
     <label>
-      Scale: <span id="scaleVal">1.00</span>
-      <input type="range" name="scale" id="scale" min="0.80" max="1.20" step="0.01" value="1.00">
+      Rotation: <span id="rotationVal">2°</span>
+      <input type="range" name="rotation" id="rotation" min="-10" max="10" step="1" value="2">
+    </label>
+
+    <!-- Crop slider -->
+    <label>
+      Crop %: <span id="cropVal">0.02</span>
+      <input type="range" name="crop" id="crop" min="0" max="0.05" step="0.001" value="0.02">
     </label>
 
     <button type="submit">Upload & Process</button>
@@ -43,48 +50,53 @@
   <div id="preview">
     <h2>Processed Images</h2>
     <div id="imagePreview"></div>
-    <a id="batchDownload" href="#" style="display:none;" download>Download All Variations</a>
+    <a id="batchDownload" href="#" download style="display:none">Download All Variations</a>
   </div>
 
   <script>
-    // Live‑update slider labels
-    const bind = (id,out,suffix="") => {
-      const s = document.getElementById(id), o = document.getElementById(out);
-      s.oninput = () => o.textContent = s.value + suffix;
+    // Contrast sync
+    const slider = document.getElementById("contrast");
+    const input  = document.getElementById("contrastInput");
+    slider.oninput = () => input.value = slider.value;
+    input.oninput  = () => {
+      let v = parseFloat(input.value);
+      if (v<0) v=0; if(v>1.5) v=1.5;
+      slider.value = input.value = v.toFixed(2);
     };
-    bind("contrast","contrastVal","");
-    bind("rotation","rotationVal","°");
-    bind("scale","scaleVal","");
 
+    // Other slider binds
+    const bind = (id,out,suf="") => {
+      const s=document.getElementById(id), o=document.getElementById(out);
+      s.oninput = () => o.textContent = s.value + suf;
+    };
+    bind("rotation","rotationVal","°");
+    bind("crop","cropVal","");
+
+    // Form submission
     document.getElementById("uploadForm").onsubmit = async e => {
       e.preventDefault();
-      const form = new FormData(e.target);
+      const data = new FormData(e.target);
       const preview = document.getElementById("imagePreview");
-      const batchLink = document.getElementById("batchDownload");
+      const batch = document.getElementById("batchDownload");
       preview.innerHTML = "<p>Processing… please wait.</p>";
-      batchLink.style.display = "none";
+      batch.style.display = "none";
 
-      const res = await fetch("/upload", { method:"POST", body: form });
-      const { processed, batch } = await res.json();
+      const res = await fetch("/upload", {method:"POST",body:data});
+      const {processed, batch: zipUrl} = await res.json();
 
-      // show thumbnails + individual download links
+      // Thumbnails + individual download
       preview.innerHTML = "";
       processed.forEach(item => {
         const img = document.createElement("img");
-        img.src = item.image;
-        preview.appendChild(img);
+        img.src = item.image; preview.appendChild(img);
         const a = document.createElement("a");
-        a.href = item.download_link;
-        a.innerText = "Download";
-        a.target = "_blank";
-        preview.appendChild(a);
-        preview.appendChild(document.createElement("br"));
+        a.href = item.download_link; a.innerText="Download"; a.target="_blank";
+        preview.appendChild(a); preview.appendChild(document.createElement("br"));
       });
 
-      // show the batch‑zip link
-      batchLink.href = batch;
-      batchLink.innerText = "Download All Variations";
-      batchLink.style.display = "block";
+      // Batch ZIP
+      batch.href = zipUrl;
+      batch.style.display = "block";
     };
   </script>
 </body>
