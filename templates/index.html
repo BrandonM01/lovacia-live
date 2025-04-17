@@ -1,14 +1,119 @@
-  <!-- … up above … -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lovacia Bot</title>
+  <style>
+    body { max-width:800px; margin:auto; font-family:sans-serif; padding:2rem }
+    label { display:block; margin:1rem 0 }
+    #origPreview img,
+    #imageGallery img { width:120px; margin:.5rem; border:1px solid #ccc }
+    .progress-bar {
+      width:100%; background:#eee; border-radius:4px; overflow:hidden; margin:1rem 0;
+    }
+    .progress-bar > div {
+      height:1rem; background:#4caf50; width:0%;
+      text-align:center; color:white; font-size:.8rem; line-height:1rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Lovacia Bot</h1>
+
+  <form id="uploadForm" enctype="multipart/form-data">
+    <label>Select images:
+      <input type="file" id="fileInput" name="files" multiple required>
+    </label>
+    <div id="origPreview"><strong>Original Thumbnails:</strong></div>
+
+    <label>Batch size:
+      <select name="count">
+        <option>5</option><option>10</option><option>25</option><option>50</option>
+      </select>
+    </label>
+
+    <label>Contrast Min (%):
+      <input type="number" name="contrast_min" value="-5" step="0.1">
+    </label>
+    <label>Contrast Max (%):
+      <input type="number" name="contrast_max" value="5" step="0.1">
+    </label>
+    <label>Flip horizontally:
+      <input type="checkbox" name="flip">
+    </label>
+
+    <button type="submit" id="uploadBtn">Upload &amp; Process</button>
+  </form>
+
+  <div id="progressWrap" style="display:none">
+    <div class="progress-bar"><div id="progressFill">0%</div></div>
+    <div>ETA: <span id="eta">--</span>s</div>
+  </div>
 
   <h2>Processed Images</h2>
+  <div id="imageGallery"></div>
+  <a id="zipLink" href="#" download style="display:none">
+    Download All Variations (ZIP)
+  </a>
 
-  <!-- ETA‐progress bar -->
-  <div class="progress mb-3">
-    <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%">0%</div>
-  </div>
+  <script>
+    const fileInput   = document.getElementById("fileInput");
+    const origPreview = document.getElementById("origPreview");
+    const form        = document.getElementById("uploadForm");
+    const uploadBtn   = document.getElementById("uploadBtn");
+    const progressWrap= document.getElementById("progressWrap");
+    const progressFill= document.getElementById("progressFill");
+    const etaLabel    = document.getElementById("eta");
+    const gallery     = document.getElementById("imageGallery");
+    const zipLink     = document.getElementById("zipLink");
 
-  <div id="imagePreview" class="d-flex flex-wrap gap-2"></div>
-  <div class="mt-3">
-    <button id="downloadSelected" class="btn btn-success me-2" style="display:none">Download Selected</button>
-    <a id="batchDownload" class="btn btn-secondary" href="#" download style="display:none">Download All Variations (ZIP)</a>
-  </div>
+    // show original thumbnails
+    fileInput.onchange = () => {
+      origPreview.innerHTML = "<strong>Original Thumbnails:</strong>";
+      Array.from(fileInput.files).forEach(f=> {
+        const img = document.createElement("img");
+        img.src = URL.createObjectURL(f);
+        origPreview.append(img);
+      });
+    };
+
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      uploadBtn.disabled = true;
+      gallery.innerHTML = "";
+      zipLink.style.display = "none";
+      progressWrap.style.display = "block";
+      progressFill.style.width = "0%";
+      progressFill.textContent = "0%";
+      etaLabel.textContent = "--";
+
+      // 1) kick off job
+      const data = new FormData(form);
+      const res  = await fetch("/upload", { method:"POST", body:data });
+      const { job_id } = await res.json();
+
+      // 2) listen to SSE
+      const es = new EventSource(`/events/${job_id}`);
+      es.addEventListener("progress", ev => {
+        const d = JSON.parse(ev.data);
+        progressFill.style.width = d.percent + "%";
+        progressFill.textContent = d.percent + "%";
+        etaLabel.textContent = d.eta;
+      });
+      es.addEventListener("image", ev => {
+        const d = JSON.parse(ev.data);
+        const img = document.createElement("img");
+        img.src = d.url;
+        gallery.append(img);
+      });
+      es.addEventListener("done", ev => {
+        const d = JSON.parse(ev.data);
+        zipLink.href = d.batch;
+        zipLink.style.display = "inline-block";
+        es.close();
+        uploadBtn.disabled = false;
+      });
+    });
+  </script>
+</body>
+</html>
