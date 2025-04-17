@@ -115,9 +115,9 @@
     const res  = await fetch("/upload", { method: "POST", body: data });
     ({ job_id: jobId } = await res.json());
 
-    uploadBtn.disabled     = true;
-    cancelBtn.style.display= "inline";
-    preview.innerHTML      = "";
+    uploadBtn.disabled      = true;
+    cancelBtn.style.display = "inline";
+    preview.innerHTML       = "";
     downloadSel.style.display = "none";
     batchLink.style.display   = "none";
     progressFill.style.width  = "0%";
@@ -151,7 +151,13 @@
               wrap.appendChild(img);
               preview.appendChild(wrap);
             });
+
             downloadSel.style.display = "inline-block";
+
+            // <<< HERE WE RE‑ENABLE FOR NEXT RUN >>>
+            uploadBtn.disabled = false;
+
+            // append to history
             const hist = document.createElement("div");
             hist.className = "batch mt-3 pt-3 border-top";
             hist.innerHTML = `<h6>Batch @ ${new Date().toLocaleString()}</h6>`;
@@ -174,8 +180,8 @@
 
   cancelBtn.onclick = () => {
     if (es) es.close();
-    uploadBtn.disabled     = false;
-    cancelBtn.style.display = "none";
+    uploadBtn.disabled      = false;
+    cancelBtn.style.display  = "none";
   };
 
   downloadSel.onclick = () => {
