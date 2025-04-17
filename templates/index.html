@@ -3,97 +3,88 @@
 <head>
   <meta charset="UTF-8">
   <title>Lovacia Bot</title>
-  <link rel="stylesheet" href="/static/style.css" />
   <style>
-    body { font-family: sans-serif; padding: 2rem; max-width: 600px; margin: auto; }
-    label { display: block; margin: 1rem 0; }
+    body { max-width: 640px; margin: auto; font-family: sans-serif; padding: 1rem; }
+    label { display: block; margin: 0.5rem 0; }
     input[type=range] { width: 100%; }
-    #imagePreview img { margin: 0.5rem; max-width: 150px; border: 1px solid #ddd; }
+    #imagePreview img { max-width: 150px; margin: 0.25rem; border: 1px solid #ccc; }
+    #batchDownload { display: block; margin: 1rem 0; }
   </style>
 </head>
 <body>
   <h1>Lovacia Bot</h1>
 
-  <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
-    <!-- File input -->
+  <form id="uploadForm" enctype="multipart/form-data">
     <label>
       Select images:
       <input type="file" name="files" multiple required>
     </label>
-
-    <!-- Variations count (already working) -->
     <label>
       Variations:
-      <input type="number" name="count" value="1" min="1" max="20" style="width:4em">
+      <input type="number" name="count" value="1" min="1" max="20" style="width: 4em">
     </label>
 
-    <!-- Contrast slider -->
     <label>
       Contrast: <span id="contrastVal">1.00</span>
       <input type="range" name="contrast" id="contrast" min="0.50" max="1.50" step="0.01" value="1.00">
     </label>
-
-    <!-- Rotation slider -->
     <label>
       Rotation: <span id="rotationVal">0°</span>
       <input type="range" name="rotation" id="rotation" min="-10" max="10" step="1" value="0">
     </label>
-
-    <!-- Scale slider -->
     <label>
       Scale: <span id="scaleVal">1.00</span>
       <input type="range" name="scale" id="scale" min="0.80" max="1.20" step="0.01" value="1.00">
     </label>
 
-    <!-- Submit -->
     <button type="submit">Upload & Process</button>
   </form>
 
   <div id="preview">
     <h2>Processed Images</h2>
     <div id="imagePreview"></div>
+    <a id="batchDownload" href="#" style="display:none;" download>Download All Variations</a>
   </div>
 
   <script>
     // Live‑update slider labels
-    const bindSlider = (id, outId, suffix="") => {
-      const slider = document.getElementById(id);
-      const output = document.getElementById(outId);
-      slider.oninput = () => { output.textContent = slider.value + suffix };
+    const bind = (id,out,suffix="") => {
+      const s = document.getElementById(id), o = document.getElementById(out);
+      s.oninput = () => o.textContent = s.value + suffix;
     };
-    bindSlider("contrast", "contrastVal", "");
-    bindSlider("rotation", "rotationVal", "°");
-    bindSlider("scale", "scaleVal", "");
+    bind("contrast","contrastVal","");
+    bind("rotation","rotationVal","°");
+    bind("scale","scaleVal","");
 
-    // Handle form submission
-    document.getElementById("uploadForm").onsubmit = async (e) => {
+    document.getElementById("uploadForm").onsubmit = async e => {
       e.preventDefault();
-      const form = e.target;
-      const data = new FormData(form);
-
-      // show loading
+      const form = new FormData(e.target);
       const preview = document.getElementById("imagePreview");
+      const batchLink = document.getElementById("batchDownload");
       preview.innerHTML = "<p>Processing… please wait.</p>";
+      batchLink.style.display = "none";
 
-      // send to backend
-      const res = await fetch("/upload", { method: "POST", body: data });
-      const payload = await res.json();
+      const res = await fetch("/upload", { method:"POST", body: form });
+      const { processed, batch } = await res.json();
 
-      // render results
+      // show thumbnails + individual download links
       preview.innerHTML = "";
-      payload.processed.forEach(item => {
+      processed.forEach(item => {
         const img = document.createElement("img");
         img.src = item.image;
         preview.appendChild(img);
-
         const a = document.createElement("a");
         a.href = item.download_link;
         a.innerText = "Download";
         a.target = "_blank";
         preview.appendChild(a);
-
         preview.appendChild(document.createElement("br"));
       });
+
+      // show the batch‑zip link
+      batchLink.href = batch;
+      batchLink.innerText = "Download All Variations";
+      batchLink.style.display = "block";
     };
   </script>
 </body>
