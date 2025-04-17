@@ -15,7 +15,8 @@ templates = Jinja2Templates(directory="templates")
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Mount uploads/ at /uploads  (uploads/ already exists in your repo)
+# Ensure and mount uploads/ at /uploads
+os.makedirs("uploads", exist_ok=True)    # <-- make sure this folder exists
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Home page
