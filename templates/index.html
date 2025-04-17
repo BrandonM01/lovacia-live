@@ -3,197 +3,131 @@
 <head>
   <meta charset="UTF-8">
   <title>Lovacia Bot</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet" crossorigin="anonymous"
-  >
   <style>
-    .thumbnail { max-width:100px; margin:.25rem; border:1px solid #ccc; }
-    #imagePreview img { max-width:120px; margin:.5rem; border:1px solid #999; }
-    .proc { text-align:center; }
-    .proc input { display:block; margin:.25rem auto; }
+    body { max-width:700px; margin:auto; font-family:sans-serif; padding:1rem }
+    label { display:block; margin:0.5rem 0 }
+    img.thumb { width:100px; margin:0.25rem; border:1px solid #ccc }
+    #progressContainer { margin:1rem 0; display:none }
+    #bar { width:100%; height:1rem; background:#eee; border-radius:4px; overflow:hidden }
+    #barInner { height:100%; width:0; background:#4a90e2; transition:width 0.2s }
+    #eta { font-size:0.9rem; color:#666 }
+    #batchDownload { display:none; margin-top:1rem }
   </style>
 </head>
 <body>
-<div class="container py-4">
-  <h1 class="text-center mb-4">Lovacia Bot</h1>
+  <h1>Lovacia Bot</h1>
+  <form id="uploadForm" enctype="multipart/form-data">
+    <label>Select images
+      <input type="file" id="fileInput" name="files" multiple required>
+    </label>
+    <div id="origPreview"><strong>Original Thumbnails:</strong></div>
 
-  <form id="uploadForm" class="mb-4" novalidate>
-    <div class="mb-3">
-      <label class="form-label">Select images</label>
-      <input type="file" id="fileInput" name="files"
-             class="form-control" multiple required>
-      <div class="invalid-feedback">Please select at least one image.</div>
-    </div>
-    <div id="origPreview" class="mb-3"><strong>Original Thumbnails:</strong></div>
+    <label>Batch size:
+      <select name="count">
+        <option>5</option><option>10</option><option>25</option><option>50</option>
+      </select>
+    </label>
+    <label>Contrast Min (%):
+      <input type="number" name="contrast_min" value="-5.0" step="0.1">
+    </label>
+    <label>Contrast Max (%):
+      <input type="number" name="contrast_max" value="5.0" step="0.1">
+    </label>
+    <label>Flip horizontally:
+      <input type="checkbox" name="flip">
+    </label>
 
-    <div class="row g-3 mb-3">
-      <div class="col-sm-3">
-        <label class="form-label">Batch size</label>
-        <select id="batchSize" name="count" class="form-select">
-          <option>5</option><option>10</option><option>25</option><option>50</option>
-        </select>
-      </div>
-      <div class="col-sm-3">
-        <label class="form-label">Contrast Min (%)</label>
-        <input type="number" id="contrastMin" name="contrast_min"
-               value="-5.0" step="0.1" class="form-control" required>
-      </div>
-      <div class="col-sm-3">
-        <label class="form-label">Contrast Max (%)</label>
-        <input type="number" id="contrastMax" name="contrast_max"
-               value="5.0" step="0.1" class="form-control" required>
-      </div>
-      <div class="col-sm-3 d-flex align-items-end">
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" id="flip" name="flip">
-          <label class="form-check-label" for="flip">Flip horizontally</label>
-        </div>
-      </div>
-    </div>
-
-    <button id="uploadBtn" class="btn btn-primary">Upload & Process</button>
-    <button id="cancelBtn" class="btn btn-warning ms-2" style="display:none;">
-      Cancel
-    </button>
+    <button type="submit" id="uploadBtn">Upload &amp; Process</button>
   </form>
 
-  <div id="preview">
-    <h2 class="h5">Processed Images</h2>
-    <div class="progress mb-3">
-      <div id="progressFill" class="progress-bar" role="progressbar"
-           style="width:0%">0%</div>
-    </div>
-    <div id="imagePreview" class="d-flex flex-wrap justify-content-center"></div>
-    <button id="downloadSelected" class="btn btn-success mt-2" style="display:none;">
-      Download Selected
-    </button>
-    <a id="batchDownload" class="btn btn-secondary mt-2" download style="display:none;">
-      Download All Variations (ZIP)
-    </a>
+  <div id="progressContainer">
+    <div id="bar"><div id="barInner"></div></div>
+    <div id="eta"></div>
   </div>
 
-  <div id="history" class="mt-5">
-    <h2 class="h5">Previous Batches</h2>
-  </div>
-</div>
+  <h2>Processed Images</h2>
+  <div id="imagePreview"></div>
+  <a id="batchDownload" href="#" download>Download All Variations (ZIP)</a>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-        crossorigin="anonymous"></script>
-<script>
-(() => {
-  const fileInput    = document.getElementById("fileInput");
-  const origPreview  = document.getElementById("origPreview");
-  const form         = document.getElementById("uploadForm");
-  const uploadBtn    = document.getElementById("uploadBtn");
-  const cancelBtn    = document.getElementById("cancelBtn");
-  const preview      = document.getElementById("imagePreview");
-  const progressFill = document.getElementById("progressFill");
-  const downloadSel  = document.getElementById("downloadSelected");
-  const batchLink    = document.getElementById("batchDownload");
-  const historyDiv   = document.getElementById("history");
-  let es, jobId;
-
-  fileInput.onchange = () => {
-    origPreview.innerHTML = "<strong>Original Thumbnails:</strong>";
-    Array.from(fileInput.files).forEach(f => {
-      const img = document.createElement("img");
-      img.src = URL.createObjectURL(f);
-      img.className = "thumbnail";
-      origPreview.appendChild(img);
-    });
-  };
-
-  form.onsubmit = async e => {
-    e.preventDefault();
-    if (!fileInput.files.length) {
-      fileInput.classList.add("is-invalid");
-      return;
-    }
-    const data = new FormData(form);
-    const res  = await fetch("/upload", { method: "POST", body: data });
-    ({ job_id: jobId } = await res.json());
-
-    uploadBtn.disabled      = true;
-    cancelBtn.style.display = "inline";
-    preview.innerHTML       = "";
-    downloadSel.style.display = "none";
-    batchLink.style.display   = "none";
-    progressFill.style.width  = "0%";
-    progressFill.textContent  = "0%";
-
-    es = new EventSource(`/progress/${jobId}`);
-    es.onmessage = ev => {
-      const { processed, total, batch_url } = JSON.parse(ev.data);
-      const pct = Math.round((processed/total)*100);
-      progressFill.style.width = pct + "%";
-      progressFill.textContent = pct + "%";
-
-      if (batch_url) {
-        es.close();
-        cancelBtn.style.display = "none";
-        batchLink.href = batch_url;
-        batchLink.style.display = "inline-block";
-
-        fetch(`/results/${jobId}`)
-          .then(r=>r.json()).then(({ items })=>{
-            preview.innerHTML = "";
-            items.forEach(item => {
-              const wrap = document.createElement("div");
-              wrap.className = "proc";
-              const chk = document.createElement("input");
-              chk.type  = "checkbox";
-              chk.value = item.download_link;
-              wrap.appendChild(chk);
-              const img = document.createElement("img");
-              img.src = item.image;
-              wrap.appendChild(img);
-              preview.appendChild(wrap);
-            });
-
-            downloadSel.style.display = "inline-block";
-
-            // <<< HERE WE RE‑ENABLE FOR NEXT RUN >>>
-            uploadBtn.disabled = false;
-
-            // append to history
-            const hist = document.createElement("div");
-            hist.className = "batch mt-3 pt-3 border-top";
-            hist.innerHTML = `<h6>Batch @ ${new Date().toLocaleString()}</h6>`;
-            items.forEach(item => {
-              const img = document.createElement("img");
-              img.src = item.image;
-              img.className = "thumbnail";
-              hist.appendChild(img);
-            });
-            const lk = document.createElement("a");
-            lk.href = batch_url; lk.innerText = "Download ZIP"; lk.target = "_blank";
-            lk.className = "d-block mt-1";
-            hist.appendChild(lk);
-            historyDiv.appendChild(hist);
-          });
-      }
+  <script>
+    const fileInput = document.getElementById("fileInput");
+    const origPreview = document.getElementById("origPreview");
+    fileInput.onchange = ()=> {
+      origPreview.innerHTML = "<strong>Original Thumbnails:</strong>";
+      Array.from(fileInput.files).forEach(f=>{
+        let img = document.createElement("img");
+        img.src = URL.createObjectURL(f);
+        img.className = "thumb";
+        origPreview.appendChild(img);
+      });
     };
-    es.onerror = () => es.close();
-  };
 
-  cancelBtn.onclick = () => {
-    if (es) es.close();
-    uploadBtn.disabled      = false;
-    cancelBtn.style.display  = "none";
-  };
+    const form  = document.getElementById("uploadForm");
+    const barC  = document.getElementById("progressContainer");
+    const inner = document.getElementById("barInner");
+    const eta   = document.getElementById("eta");
+    const prev  = document.getElementById("imagePreview");
+    const zipA  = document.getElementById("batchDownload");
 
-  downloadSel.onclick = () => {
-    preview.querySelectorAll("input[type=checkbox]:checked").forEach(chk=>{
-      const a = document.createElement("a");
-      a.href = chk.value; a.download = "";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    });
-  };
-})();
-</script>
+    form.onsubmit = e=>{
+      e.preventDefault();
+      prev.innerHTML = "";
+      inner.style.width = "0%";
+      eta.textContent = "";
+      zipA.style.display = "none";
+      barC.style.display = "block";
+      document.getElementById("uploadBtn").disabled = true;
+
+      // SSE connection on the POST
+      const data = new FormData(form);
+      const es = new EventSource("/upload?" + new URLSearchParams(), {
+        // note: most browsers don't allow POST for EventSource; if you hit CORS, switch to GET+query-string
+      });
+
+      // manually POST the form via fetch and then pipe its SSE back...
+      fetch("/upload", { method:"POST", body:data })
+        .then(r=>r.body.getReader())
+        .then(reader=>{
+          const decoder = new TextDecoder(), chunkBuf = [];
+          function read() {
+            reader.read().then(({value,done})=>{
+              if(done) return;
+              chunkBuf.push(decoder.decode(value));
+              const s = chunkBuf.join("").split(/\r?\n\r?\n/);
+              s.slice(0,-1).forEach(block=>{
+                block.split(/\r?\n/).forEach(line=>{
+                  if(!line) return;
+                  const [prefix,rest] = line.split(":",2);
+                  if(prefix==="event" && rest.trim()==="progress") currentEvent="progress";
+                  if(prefix==="data"){
+                    const payload = JSON.parse(rest.slice(1));
+                    if(currentEvent==="progress"){
+                      inner.style.width = payload.percent+"%";
+                      eta.textContent = "ETA: "+payload.eta+"s";
+                      let img=document.createElement("img");
+                      img.src=payload.last_image;
+                      img.className="thumb";
+                      prev.appendChild(img);
+                    }
+                    if(currentEvent==="complete"){
+                      barC.style.display="none";
+                      zipA.href = payload.batch;
+                      zipA.style.display="block";
+                      document.getElementById("uploadBtn").disabled = false;
+                    }
+                  }
+                });
+              });
+              read();
+            });
+          }
+          read();
+        })
+        .catch(err=>{
+          console.error(err);
+          document.getElementById("uploadBtn").disabled = false;
+        });
+    }
+  </script>
 </body>
 </html>
