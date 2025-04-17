@@ -4,23 +4,13 @@
   <meta charset="UTF-8">
   <title>Lovacia Bot</title>
   <style>
-    body {
-      max-width:600px; margin:auto; font-family:sans-serif; padding:2rem;
-      text-align:center;
-    }
-    label { display:block; margin:1rem 0; }
-    #origPreview img { max-width:100px; margin:.25rem; border:1px solid #ccc; }
-    #imagePreview img { max-width:120px; margin:.5rem; border:1px solid #999; }
-    #imagePreview { display:flex; flex-wrap:wrap; justify-content:center; }
-    #progressBar {
-      width:100%; background:#eee; border:1px solid #ccc; height:1rem; margin:1rem 0;
-    }
-    #progressFill {
-      height:100%; width:0%; background:#28a745;
-    }
-    #batchDownload, #cancelBtn {
-      margin:1rem;
-    }
+    body { max-width:600px; margin:auto; font-family:sans-serif; padding:2rem }
+    label { display:block; margin:1rem 0 }
+    #origPreview img, #imagePreview img { max-width:100px; margin:.25rem; border:1px solid #ccc }
+    #batchDownload { display:block; margin:1rem 0 }
+    #cancelBtn { margin-left:1rem; }
+    .processed-row { display:flex; flex-wrap:wrap; }
+    .processed-item { margin:0.5rem; text-align:center; }
   </style>
 </head>
 <body>
@@ -33,18 +23,26 @@
     </label>
     <div id="origPreview"><strong>Original Thumbnails:</strong></div>
 
-    <label>Batch size:
+    <label>
+      Batch size:
       <select name="count">
-        <option>5</option><option>10</option><option>25</option><option>50</option>
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="25">25</option>
+        <option value="50">50</option>
       </select>
     </label>
-    <label>Contrast Min (%):
+
+    <label>
+      Contrast Min (%):
       <input type="number" name="contrast_min" value="-5.0" step="0.1">
     </label>
-    <label>Contrast Max (%):
+    <label>
+      Contrast Max (%):
       <input type="number" name="contrast_max" value="5.0" step="0.1">
     </label>
-    <label>Flip horizontally:
+    <label>
+      Flip horizontally:
       <input type="checkbox" name="flip">
     </label>
 
@@ -54,88 +52,82 @@
 
   <div id="preview">
     <h2>Processed Images</h2>
-    <div id="progressBar"><div id="progressFill"></div></div>
-    <div id="imagePreview"></div>
-    <a id="batchDownload" href="#" download style="display:none;">Download ZIP</a>
+    <div id="imagePreview" class="processed-row"></div>
+    <a id="batchDownload" href="#" download style="display:none">Download All Variations (ZIP)</a>
   </div>
 
   <script>
-    const fileInput    = document.getElementById("fileInput");
-    const origPreview  = document.getElementById("origPreview");
-    const form         = document.getElementById("uploadForm");
-    const uploadBtn    = document.getElementById("uploadBtn");
-    const cancelBtn    = document.getElementById("cancelBtn");
-    const progressBar  = document.getElementById("progressBar");
-    const progressFill = document.getElementById("progressFill");
-    const imagePreview = document.getElementById("imagePreview");
-    const batchDownload= document.getElementById("batchDownload");
-    let es, jobId;
-
+    // Show original thumbnails
+    const fileInput = document.getElementById("fileInput");
+    const origPreview = document.getElementById("origPreview");
     fileInput.onchange = () => {
       origPreview.innerHTML = "<strong>Original Thumbnails:</strong>";
-      Array.from(fileInput.files).forEach(f => {
-        let img = document.createElement("img");
-        img.src = URL.createObjectURL(f);
+      Array.from(fileInput.files).forEach(file => {
+        const img = document.createElement("img");
+        img.src = URL.createObjectURL(file);
         origPreview.appendChild(img);
       });
     };
 
+    // AbortController for cancellation
+    let controller;
+    const uploadBtn = document.getElementById("uploadBtn");
+    const cancelBtn = document.getElementById("cancelBtn");
+    const form = document.getElementById("uploadForm");
+    const preview = document.getElementById("imagePreview");
+    const batchLink = document.getElementById("batchDownload");
+
     form.onsubmit = async e => {
       e.preventDefault();
-      // kick off the job
-      const resp = await fetch("/upload", {
-        method: "POST",
-        body: new FormData(form),
-      });
-      ({ job_id: jobId } = await resp.json());
+      controller = new AbortController();
 
-      // prep UI
-      uploadBtn.disabled    = true;
-      cancelBtn.style.display= "inline";
-      imagePreview.innerHTML= "";
-      progressFill.style.width = "0%";
-      batchDownload.style.display = "none";
+      uploadBtn.style.display = "none";
+      cancelBtn.style.display = "inline";
 
-      // subscribe to SSE
-      es = new EventSource(`/progress/${jobId}`);
-      es.onmessage = ev => {
-        const { processed, total, batch_url } = JSON.parse(ev.data);
-        const pct = Math.round(processed/total * 100);
-        progressFill.style.width = pct + "%";
+      preview.innerHTML = "<p>Processing…</p>";
+      batchLink.style.display = "none";
 
-        if (batch_url) {
-          // done
-          es.close();
-          cancelBtn.style.display="none";
-          batchDownload.href = batch_url;
-          batchDownload.style.display="inline";
-          // fetch and render processed images
-          fetch(batch_url.replace("_batch_", ".")) // you'd adjust if needed
-            .then(() => {
-              // simply re-fetch the processed list via a lightweight endpoint
-              fetch(`/upload?job=${jobId}`)
-                .then(r=>r.json())
-                .then(({processed})=>{
-                  processed.forEach(item=>{
-                    let img = document.createElement("img");
-                    img.src = item.image;
-                    imagePreview.appendChild(img);
-                  });
-                });
-            });
+      const data = new FormData(form);
+      try {
+        const res = await fetch("/upload", {
+          method: "POST",
+          body: data,
+          signal: controller.signal
+        });
+        const { processed, batch } = await res.json();
+
+        preview.innerHTML = "";
+        processed.forEach(item => {
+          const wrapper = document.createElement("div");
+          wrapper.className = "processed-item";
+          const img = document.createElement("img");
+          img.src = item.image;
+          const a = document.createElement("a");
+          a.href = item.download_link;
+          a.innerText = "Download";
+          a.target = "_blank";
+          wrapper.append(img, a);
+          preview.appendChild(wrapper);
+        });
+
+        batchLink.href = batch;
+        batchLink.style.display = "block";
+
+      } catch (err) {
+        if (err.name === "AbortError") {
+          preview.innerHTML = "<p>Processing cancelled.</p>";
+        } else {
+          console.error(err);
+          preview.innerHTML = "<p>Error occurred.</p>";
         }
-      };
-
-      es.onerror = () => {
-        es.close();
-        cancelBtn.style.display="none";
-      };
+      } finally {
+        uploadBtn.style.display = "inline";
+        cancelBtn.style.display = "none";
+      }
     };
 
     cancelBtn.onclick = () => {
-      if (es) es.close();
-      uploadBtn.disabled = false;
-      cancelBtn.style.display = "none";
+      if (controller) controller.abort();
     };
   </script>
 </body>
