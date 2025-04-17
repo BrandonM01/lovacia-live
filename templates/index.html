@@ -12,7 +12,9 @@
     <input id="fileInput" type="file" multiple>
   </label>
 
-  <!-- Customisation controls: -->
+  <h3>Original Thumbnails:</h3>
+  <img id="origThumb" width="200" style="display:none">
+
   <div>
     <label>
       Batch size:
@@ -23,25 +25,26 @@
         <option value="50">50</option>
       </select>
     </label>
+    <br>
     <label>
       Contrast Min (%):
       <input id="contrastMin" type="number" step="0.1" value="-5">
     </label>
+    <br>
     <label>
       Contrast Max (%):
       <input id="contrastMax" type="number" step="0.1" value="5">
     </label>
+    <br>
     <label>
       Flip horizontally:
       <input id="flip" type="checkbox">
     </label>
+    <br>
+    <button id="cancelBtn" style="display:none">Cancel</button>
   </div>
 
   <button id="uploadBtn">Upload & Process</button>
-  <button id="cancelBtn" style="display:none">Cancel</button>
-
-  <h3>Original Thumbnail:</h3>
-  <img id="origThumb" width="200" style="display:none">
 
   <h2>Progress:</h2>
   <div id="progress">Idle</div>
@@ -64,9 +67,10 @@
 
     uploadBtn.addEventListener("click", async () => {
       const files = Array.from(fileInput.files);
-      if (!files.length) return alert("Select at least one file");
+      if (!files.length) {
+        return alert("Please select at least one image.");
+      }
 
-      // disable + show cancel
       uploadBtn.disabled = true;
       cancelBtn.style.display = "inline";
       progressEl.innerText = "Processing…";
