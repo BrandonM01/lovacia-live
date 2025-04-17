@@ -4,11 +4,59 @@
   <meta charset="UTF-8">
   <title>Lovacia Bot</title>
   <style>
-    body { max-width:600px; margin:auto; font-family:sans-serif; padding:2rem }
-    label { display:block; margin:1rem 0 }
-    #origPreview img, #imagePreview img { max-width:100px; margin:.25rem; border:1px solid #ccc }
-    #batchDownload { display:block; margin:1rem 0 }
-    #cancelBtn { margin-left:1rem; }
+    body {
+      max-width: 600px;
+      margin: auto;
+      font-family: sans-serif;
+      padding: 2rem;
+    }
+    label {
+      display: block;
+      margin: 1rem 0;
+    }
+    /* Original thumbnails */
+    #origPreview img {
+      max-width: 100px;
+      margin: .25rem;
+      border: 1px solid #ccc;
+    }
+    /* Processed images: horizontal row */
+    #imagePreview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      margin-top: .5rem;
+    }
+    #imagePreview img {
+      max-width: 120px;
+      border: 1px solid #999;
+    }
+    /* Batch download link */
+    #batchDownload {
+      display: block;
+      margin: 1rem 0;
+    }
+    /* History gallery */
+    #history {
+      margin-top: 2rem;
+    }
+    #history h2 {
+      margin-bottom: .5rem;
+    }
+    .batch {
+      margin-bottom: 1.5rem;
+      padding: .5rem;
+      border-top: 1px solid #ddd;
+    }
+    .batch h3 {
+      font-size: 1rem;
+      margin: .5rem 0;
+    }
+    .batch img {
+      max-width: 80px;
+      margin: .25rem;
+      border: 1px dashed #bbb;
+    }
   </style>
 </head>
 <body>
@@ -19,6 +67,7 @@
       Select images:
       <input type="file" id="fileInput" name="files" multiple required>
     </label>
+
     <div id="origPreview"><strong>Original Thumbnails:</strong></div>
 
     <label>
@@ -51,7 +100,12 @@
   <div id="preview">
     <h2>Processed Images</h2>
     <div id="imagePreview"></div>
-    <a id="batchDownload" href="#" download style="display:none">Download All Variations</a>
+    <a id="batchDownload" href="#" download style="display:none">Download All Variations (ZIP)</a>
+  </div>
+
+  <div id="history">
+    <h2>Previous Batches</h2>
+    <!-- new batches will be appended here -->
   </div>
 
   <script>
@@ -67,19 +121,19 @@
       });
     };
 
-    // AbortController for cancellation
+    // Set up upload/cancel buttons
     let controller;
     const uploadBtn = document.getElementById("uploadBtn");
     const cancelBtn = document.getElementById("cancelBtn");
     const form = document.getElementById("uploadForm");
     const preview = document.getElementById("imagePreview");
     const batchLink = document.getElementById("batchDownload");
+    const historyDiv = document.getElementById("history");
 
     form.onsubmit = async e => {
       e.preventDefault();
       controller = new AbortController();
 
-      // hide upload, show cancel
       uploadBtn.style.display = "none";
       cancelBtn.style.display = "inline";
 
@@ -95,11 +149,30 @@
         });
         const { processed, batch } = await res.json();
 
+        // 1) Save this batch into history
+        const hist = document.createElement("div");
+        hist.className = "batch";
+        hist.innerHTML = `<h3>Batch @ ${new Date().toLocaleString()}</h3>`;
+        processed.forEach(item => {
+          const img = document.createElement("img");
+          img.src = item.image;
+          hist.appendChild(img);
+        });
+        const histDownload = document.createElement("a");
+        histDownload.href = batch;
+        histDownload.innerText = "Download ZIP";
+        histDownload.target = "_blank";
+        histDownload.style.display = "block";
+        hist.appendChild(histDownload);
+        historyDiv.appendChild(hist);
+
+        // 2) Render current batch
         preview.innerHTML = "";
         processed.forEach(item => {
           const img = document.createElement("img");
           img.src = item.image;
           preview.appendChild(img);
+
           const a = document.createElement("a");
           a.href = item.download_link;
           a.innerText = "Download";
@@ -124,10 +197,10 @@
       }
     };
 
+    // Cancel in‑flight upload
     cancelBtn.onclick = () => {
       if (controller) controller.abort();
     };
   </script>
 </body>
 </html>
-
