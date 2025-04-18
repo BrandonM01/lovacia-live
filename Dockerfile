@@ -1,20 +1,22 @@
-# Use a slim Python image
 FROM python:3.11-slim
 
-# Install ffmpeg for moviepy
-RUN apt-get update && \
-    apt-get install -y ffmpeg && \
-    rm -rf /var/lib/apt/lists/*
+# Install dependencies (including ffmpeg)
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set workdir
+# Set working directory
 WORKDIR /app
 
-# Install Python deps
-COPY requirements.txt .
-RUN pip install --no‑cache-dir -r requirements.txt
+# Copy requirements file and install dependencies
+COPY requirements.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app code
+# Copy all project files
 COPY . .
 
-# Run
+# Run application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
