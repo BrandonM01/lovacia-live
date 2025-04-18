@@ -3,117 +3,169 @@
 <head>
   <meta charset="UTF-8">
   <title>Lovacia Bot</title>
+  <!-- Bootstrap CSS for styling/buttons/progress bar -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { max-width:800px; margin:auto; font-family:sans-serif; padding:2rem }
-    label { display:block; margin:1rem 0 }
-    #origPreview img,
-    #imageGallery img { width:120px; margin:.5rem; border:1px solid #ccc }
-    .progress-bar {
-      width:100%; background:#eee; border-radius:4px; overflow:hidden; margin:1rem 0;
+    body {
+      max-width: 800px;
+      margin: auto;
+      font-family: sans-serif;
+      padding: 2rem;
     }
-    .progress-bar > div {
-      height:1rem; background:#4caf50; width:0%;
-      text-align:center; color:white; font-size:.8rem; line-height:1rem;
+    #origPreview img,
+    #imagePreview img {
+      max-width: 150px;
+      margin: .5rem;
+      border: 1px solid #ccc;
     }
   </style>
 </head>
 <body>
-  <h1>Lovacia Bot</h1>
+
+  <h1 class="mb-4 text-center">Lovacia Bot</h1>
 
   <form id="uploadForm" enctype="multipart/form-data">
-    <label>Select images:
-      <input type="file" id="fileInput" name="files" multiple required>
-    </label>
-    <div id="origPreview"><strong>Original Thumbnails:</strong></div>
+    <div class="mb-3">
+      <label class="form-label">Select images</label>
+      <input
+        type="file"
+        class="form-control"
+        id="fileInput"
+        name="files"
+        multiple
+        required
+      >
+    </div>
 
-    <label>Batch size:
-      <select name="count">
-        <option>5</option><option>10</option><option>25</option><option>50</option>
-      </select>
-    </label>
+    <div id="origPreview" class="mb-3">
+      <strong>Original Thumbnails:</strong>
+    </div>
 
-    <label>Contrast Min (%):
-      <input type="number" name="contrast_min" value="-5" step="0.1">
-    </label>
-    <label>Contrast Max (%):
-      <input type="number" name="contrast_max" value="5" step="0.1">
-    </label>
-    <label>Flip horizontally:
-      <input type="checkbox" name="flip">
-    </label>
+    <div class="row mb-3">
+      <div class="col-md-3">
+        <label class="form-label">Batch size</label>
+        <select name="count" class="form-select">
+          <option value="5">5</option>
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Contrast Min (%)</label>
+        <input type="number" name="contrast_min" class="form-control" value="-5.0" step="0.1">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Contrast Max (%)</label>
+        <input type="number" name="contrast_max" class="form-control" value="5.0" step="0.1">
+      </div>
+      <div class="col-md-3 d-flex align-items-end">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="flip" id="flipCheck">
+          <label class="form-check-label" for="flipCheck">Flip horizontally</label>
+        </div>
+      </div>
+    </div>
 
-    <button type="submit" id="uploadBtn">Upload &amp; Process</button>
+    <button type="submit" id="uploadBtn" class="btn btn-primary">Upload & Process</button>
+    <button type="button" id="cancelBtn" class="btn btn-secondary ms-2" style="display:none;">
+      Cancel
+    </button>
   </form>
 
-  <div id="progressWrap" style="display:none">
-    <div class="progress-bar"><div id="progressFill">0%</div></div>
-    <div>ETA: <span id="eta">--</span>s</div>
+  <!-- Animated, indeterminate progress bar -->
+  <div id="loadingBar" class="progress my-4" style="display:none;">
+    <div
+      class="progress-bar progress-bar-striped progress-bar-animated w-100"
+      role="progressbar"
+    >Processing…</div>
   </div>
 
   <h2>Processed Images</h2>
-  <div id="imageGallery"></div>
-  <a id="zipLink" href="#" download style="display:none">
-    Download All Variations (ZIP)
-  </a>
+  <div id="imagePreview" class="d-flex flex-wrap"></div>
+  <a
+    id="batchDownload"
+    class="btn btn-success mt-3"
+    href="#"
+    download
+    style="display:none"
+  >Download All Variations (ZIP)</a>
 
   <script>
-    const fileInput   = document.getElementById("fileInput");
+    // Show original thumbnails on file select
+    const fileInput = document.getElementById("fileInput");
     const origPreview = document.getElementById("origPreview");
-    const form        = document.getElementById("uploadForm");
-    const uploadBtn   = document.getElementById("uploadBtn");
-    const progressWrap= document.getElementById("progressWrap");
-    const progressFill= document.getElementById("progressFill");
-    const etaLabel    = document.getElementById("eta");
-    const gallery     = document.getElementById("imageGallery");
-    const zipLink     = document.getElementById("zipLink");
-
-    // show original thumbnails
     fileInput.onchange = () => {
       origPreview.innerHTML = "<strong>Original Thumbnails:</strong>";
-      Array.from(fileInput.files).forEach(f=> {
+      Array.from(fileInput.files).forEach(file => {
         const img = document.createElement("img");
-        img.src = URL.createObjectURL(f);
-        origPreview.append(img);
+        img.src = URL.createObjectURL(file);
+        origPreview.appendChild(img);
       });
     };
 
-    form.addEventListener("submit", async e => {
+    let controller;
+    const form = document.getElementById("uploadForm");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const cancelBtn = document.getElementById("cancelBtn");
+    const loadingBar = document.getElementById("loadingBar");
+    const preview = document.getElementById("imagePreview");
+    const batchLink = document.getElementById("batchDownload");
+
+    form.onsubmit = async e => {
       e.preventDefault();
+      controller = new AbortController();
+
+      // Toggle UI
       uploadBtn.disabled = true;
-      gallery.innerHTML = "";
-      zipLink.style.display = "none";
-      progressWrap.style.display = "block";
-      progressFill.style.width = "0%";
-      progressFill.textContent = "0%";
-      etaLabel.textContent = "--";
+      cancelBtn.style.display = "inline-block";
+      loadingBar.style.display = "block";
+      preview.innerHTML = "";
+      batchLink.style.display = "none";
 
-      // 1) kick off job
       const data = new FormData(form);
-      const res  = await fetch("/upload", { method:"POST", body:data });
-      const { job_id } = await res.json();
+      try {
+        const res = await fetch("/upload", {
+          method: "POST",
+          body: data,
+          signal: controller.signal
+        });
+        const { processed, batch } = await res.json();
 
-      // 2) listen to SSE
-      const es = new EventSource(`/events/${job_id}`);
-      es.addEventListener("progress", ev => {
-        const d = JSON.parse(ev.data);
-        progressFill.style.width = d.percent + "%";
-        progressFill.textContent = d.percent + "%";
-        etaLabel.textContent = d.eta;
-      });
-      es.addEventListener("image", ev => {
-        const d = JSON.parse(ev.data);
-        const img = document.createElement("img");
-        img.src = d.url;
-        gallery.append(img);
-      });
-      es.addEventListener("done", ev => {
-        const d = JSON.parse(ev.data);
-        zipLink.href = d.batch;
-        zipLink.style.display = "inline-block";
-        es.close();
+        // Render results
+        processed.forEach(item => {
+          const img = document.createElement("img");
+          img.src = item.image;
+          preview.appendChild(img);
+
+          const a = document.createElement("a");
+          a.href = item.download_link;
+          a.innerText = "Download";
+          a.target = "_blank";
+          a.classList.add("d-block","ms-1","mb-3");
+          preview.appendChild(a);
+        });
+
+        batchLink.href = batch;
+        batchLink.style.display = "inline-block";
+
+      } catch (err) {
+        if (err.name === "AbortError") {
+          preview.innerHTML = "<p>Processing cancelled.</p>";
+        } else {
+          console.error(err);
+          preview.innerHTML = "<p class='text-danger'>Error occurred.</p>";
+        }
+      } finally {
         uploadBtn.disabled = false;
-      });
-    });
+        cancelBtn.style.display = "none";
+        loadingBar.style.display = "none";
+      }
+    };
+
+    cancelBtn.onclick = () => {
+      if (controller) controller.abort();
+    };
   </script>
 </body>
 </html>
