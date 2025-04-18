@@ -3,30 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <title>Lovacia Bot</title>
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  >
+  <!-- Bootstrap CSS for styling/buttons/progress bar -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { max-width:800px; margin:auto; padding:2rem; }
-    #origPreview img, #origPreview video,
-    #imagePreview img, #imagePreview video {
-      max-width:150px; margin:.5rem; border:1px solid #ccc;
+    body {
+      max-width: 800px;
+      margin: auto;
+      font-family: sans-serif;
+      padding: 2rem;
+    }
+    #origPreview img,
+    #results img {
+      max-width: 150px;
+      margin: .5rem;
+      border: 1px solid #ccc;
     }
   </style>
 </head>
 <body>
-  <h1 class="text-center mb-4">Lovacia Bot</h1>
 
-  <form id="uploadForm" enctype="multipart/form-data" class="mb-4">
+  <h1 class="mb-4 text-center">Lovacia Bot</h1>
+
+  <form id="frm" enctype="multipart/form-data" class="mb-4">
     <div class="mb-3">
       <label class="form-label">Select Images/Videos</label>
-      <input type="file" name="files" class="form-control" multiple accept="image/*,video/*" required>
+      <input type="file" name="files" class="form-control" multiple required>
     </div>
 
     <div id="origPreview" class="mb-3"><strong>Original Thumbnails:</strong></div>
 
-    <div class="row g-3 mb-3">
+    <div class="row mb-3">
       <div class="col-md-3">
         <label class="form-label">Batch size</label>
         <select name="count" class="form-select">
@@ -35,86 +41,89 @@
       </div>
       <div class="col-md-3">
         <label class="form-label">Contrast Min (%)</label>
-        <input type="number" name="contrast_min" step="0.1" value="-5" class="form-control">
+        <input type="number" name="contrast_min" value="-5" step="0.1" class="form-control">
       </div>
       <div class="col-md-3">
         <label class="form-label">Contrast Max (%)</label>
-        <input type="number" name="contrast_max" step="0.1" value="5" class="form-control">
+        <input type="number" name="contrast_max" value="5" step="0.1" class="form-control">
       </div>
       <div class="col-md-3 d-flex align-items-end">
         <div class="form-check">
-          <input type="checkbox" name="flip" class="form-check-input" id="flipCheck">
+          <input class="form-check-input" type="checkbox" name="flip" id="flipCheck">
           <label class="form-check-label" for="flipCheck">Flip horizontally</label>
         </div>
       </div>
     </div>
 
-    <button class="btn btn-primary" id="uploadBtn">Upload &amp; Process</button>
+    <button class="btn btn-primary" type="submit">Upload &amp; Process</button>
   </form>
 
-  <h2>Processed Media</h2>
-  <div id="imagePreview" class="d-flex flex-wrap"></div>
-  <a id="batchDownload" class="btn btn-success mt-3" href="#" download style="display:none">
+  <div id="loading" class="text-center my-4" style="display:none;">
+    <div class="spinner-border" role="status"><span class="visually-hidden">Loading…</span></div>
+    <p>Processing…</p>
+  </div>
+
+  <h2>Processed Images/Videos</h2>
+  <div id="results" class="d-flex flex-wrap"></div>
+  <a id="batchDL" class="btn btn-success mt-3" href="#" download style="display:none">
     Download All Variations (ZIP)
   </a>
 
   <script>
-    const form       = document.getElementById('uploadForm');
-    const fileInput  = form.files;
-    const origPrev   = document.getElementById('origPreview');
-    const uploadBtn  = document.getElementById('uploadBtn');
-    const previewBox = document.getElementById('imagePreview');
-    const batchLink  = document.getElementById('batchDownload');
+    const frm = document.getElementById('frm');
+    const orig = document.getElementById('origPreview');
+    const loadEl = document.getElementById('loading');
+    const resEl  = document.getElementById('results');
+    const zipEl  = document.getElementById('batchDL');
 
-    form.files.onchange = () => {
-      origPrev.innerHTML = '<strong>Original Thumbnails:</strong>';
-      Array.from(form.files.files).forEach(f => {
-        let el;
-        if (f.type.startsWith('video/')) {
-          el = document.createElement('video');
-          el.src = URL.createObjectURL(f);
-          el.controls = false; el.muted = true; el.loop = true;
-        } else {
-          el = document.createElement('img');
-          el.src = URL.createObjectURL(f);
-        }
-        origPrev.appendChild(el);
+    // Preview originals
+    frm.querySelector('[type=file]').addEventListener('change', e => {
+      orig.innerHTML = '<strong>Original Thumbnails:</strong>';
+      Array.from(e.target.files).forEach(f => {
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(f);
+        orig.appendChild(img);
       });
-    };
+    });
 
-    form.onsubmit = async e => {
-      e.preventDefault();
-      uploadBtn.disabled = true;
-      previewBox.innerHTML = '<p>Processing…</p>';
-      batchLink.style.display = 'none';
+    frm.onsubmit = async ev => {
+      ev.preventDefault();
+      loadEl.style.display = 'block';
+      resEl.innerHTML = '';
+      zipEl.style.display = 'none';
 
-      const res = await fetch('/upload', { method:'POST', body:new FormData(form) });
-      const { processed, batch } = await res.json();
+      const data = new FormData(frm);
+      const r1 = await fetch('/upload', { method:'POST', body:data });
+      const { job_id } = await r1.json();
 
-      previewBox.innerHTML = '';
-      processed.forEach(item => {
-        let el;
-        if (item.image.match(/\.(mp4|mov|avi)$/)) {
-          el = document.createElement('video');
-          el.src = item.image;
-          el.controls = true;
-        } else {
-          el = document.createElement('img');
-          el.src = item.image;
+      // listen for SSE
+      const es = new EventSource(`/progress/${job_id}`);
+      es.onmessage = async msg => {
+        const { processed, total, batch_url } = JSON.parse(msg.data);
+        if (batch_url) {
+          es.close();
+          loadEl.style.display = 'none';
+          const r2 = await fetch(`/results/${job_id}`);
+          const { items } = await r2.json();
+          items.forEach(it => {
+            const el = document.createElement(it.image.match(/\\.(mp4|mov|avi)$/) 
+              ? 'video' : 'img');
+            el.src = it.image;
+            el.controls = !!el.tagName.match(/video/);
+            el.classList.add('m-1');
+            resEl.appendChild(el);
+
+            const a = document.createElement('a');
+            a.href = it.download_link;
+            a.target = '_blank';
+            a.innerText = 'Download';
+            a.classList.add('d-block','mb-3');
+            resEl.appendChild(a);
+          });
+          zipEl.href = batch_url;
+          zipEl.style.display = 'inline-block';
         }
-        previewBox.appendChild(el);
-
-        const a = document.createElement('a');
-        a.href = item.download_link;
-        a.innerText = 'Download';
-        a.target = '_blank';
-        a.classList.add('d-block','mb-3');
-        previewBox.appendChild(a);
-      });
-
-      batchLink.href = batch;
-      batchLink.style.display = 'inline-block';
-      uploadBtn.disabled = false;
+      };
     };
   </script>
 </body>
