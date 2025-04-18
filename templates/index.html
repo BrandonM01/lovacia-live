@@ -3,114 +3,170 @@
 <head>
   <meta charset="UTF-8">
   <title>Lovacia Bot</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { max-width:800px; margin:auto; padding:2rem; font-family:sans-serif; }
-    #origPreview img, #results img, #results video { max-width:150px; margin:.5rem; border:1px solid #ccc }
+    body { max-width:800px; margin:auto; font-family:sans-serif; padding:2rem }
+    #origPreview img,
+    #currentPreview img,
+    #historyPreview img {
+      max-width:150px;
+      margin:.5rem;
+      border:1px solid #ccc;
+    }
+    #origPreview video,
+    #currentPreview video,
+    #historyPreview video {
+      max-width:150px;
+      margin:.5rem;
+      border:1px solid #ccc;
+    }
+    .spinner { margin:2rem auto; text-align:center; display:none; }
   </style>
 </head>
 <body>
+  <h1 style="text-align:center">Lovacia Bot</h1>
 
-  <h1 class="text-center mb-4">Lovacia Bot</h1>
+  <form id="uploadForm" enctype="multipart/form-data">
+    <label>
+      Select files (images & videos):
+      <input type="file" name="files" id="fileInput" multiple required>
+    </label>
+    <div id="origPreview"><strong>Original Thumbnails:</strong></div>
 
-  <form id="frm" class="mb-4" enctype="multipart/form-data">
-    <div class="mb-3">
-      <label class="form-label">Select Images/Videos</label>
-      <input type="file" name="files" class="form-control" multiple required>
-    </div>
+    <label>
+      Batch size:
+      <select name="count">
+        <option>5</option><option>10</option><option>25</option><option>50</option>
+      </select>
+    </label>
+    <label>
+      Contrast Min (%):
+      <input type="number" name="contrast_min" value="-5.0" step="0.1">
+    </label>
+    <label>
+      Contrast Max (%):
+      <input type="number" name="contrast_max" value="5.0" step="0.1">
+    </label>
+    <label>
+      Flip horizontally:
+      <input type="checkbox" name="flip">
+    </label>
 
-    <div id="origPreview" class="mb-3"><strong>Original Thumbnails:</strong></div>
-
-    <div class="row mb-3">
-      <div class="col-md-3">
-        <label class="form-label">Batch size</label>
-        <select name="count" class="form-select"><option>5</option><option>10</option><option>25</option><option>50</option></select>
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">Contrast Min (%)</label>
-        <input type="number" name="contrast_min" step="0.1" value="-5" class="form-control">
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">Contrast Max (%)</label>
-        <input type="number" name="contrast_max" step="0.1" value="5" class="form-control">
-      </div>
-      <div class="col-md-3 d-flex align-items-end">
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" name="flip" id="flip">
-          <label class="form-check-label" for="flip">Flip horizontally</label>
-        </div>
-      </div>
-    </div>
-
-    <button type="submit" class="btn btn-primary">Upload &amp; Process</button>
+    <button type="submit" id="uploadBtn">Upload & Process</button>
+    <button type="button" id="cancelBtn" style="display:none">Cancel</button>
   </form>
 
-  <div id="spinner" class="text-center my-4" style="display:none">
-    <div class="spinner-border" role="status"><span class="visually-hidden">Loading…</span></div>
-    <p>Processing…</p>
+  <div class="spinner" id="spinner">
+    <svg width="40" height="40" viewBox="0 0 50 50">
+      <circle cx="25" cy="25" r="20" stroke="#888" stroke-width="5" fill="none"></circle>
+    </svg>
+    <div>Processing…</div>
   </div>
 
-  <h2>Processed Images/Videos</h2>
-  <div id="results" class="d-flex flex-wrap"></div>
-  <a id="batchDL" class="btn btn-success mt-3" style="display:none" download>Download All Variations (ZIP)</a>
+  <!-- Current batch -->
+  <h2>Current Batch</h2>
+  <div id="currentPreview"></div>
+  <a id="batchLink" href="#" download style="display:none">
+    Download All Variations (ZIP)
+  </a>
+
+  <!-- History of previous -->
+  <h2>History</h2>
+  <div id="historyPreview"></div>
+
 
   <script>
-    const frm = document.getElementById("frm"),
-          orig = document.getElementById("origPreview"),
-          spin = document.getElementById("spinner"),
-          res  = document.getElementById("results"),
-          zdl  = document.getElementById("batchDL");
-
     // preview originals
-    frm.querySelector('[type=file]').onchange = e => {
-      orig.innerHTML = "<strong>Original Thumbnails:</strong>";
-      Array.from(e.target.files).forEach(f => {
-        const img = document.createElement("img");
-        img.src = URL.createObjectURL(f);
-        orig.appendChild(img);
+    const fileInput = document.getElementById("fileInput");
+    const origPreview = document.getElementById("origPreview");
+    fileInput.onchange = () => {
+      origPreview.innerHTML = "<strong>Original Thumbnails:</strong>";
+      Array.from(fileInput.files).forEach(file => {
+        if (file.type.startsWith("image/")) {
+          let img = document.createElement("img");
+          img.src = URL.createObjectURL(file);
+          origPreview.appendChild(img);
+        } else if (file.type.startsWith("video/")) {
+          let vid = document.createElement("video");
+          vid.src = URL.createObjectURL(file);
+          vid.controls = false;
+          origPreview.appendChild(vid);
+        }
       });
     };
 
-    frm.onsubmit = async ev => {
-      ev.preventDefault();
-      spin.style.display = "block";
-      res.innerHTML  = "";
-      zdl.style.display="none";
+    let controller;
+    const form       = document.getElementById("uploadForm");
+    const uploadBtn  = document.getElementById("uploadBtn");
+    const cancelBtn  = document.getElementById("cancelBtn");
+    const spinner    = document.getElementById("spinner");
+    const currentDiv = document.getElementById("currentPreview");
+    const historyDiv = document.getElementById("historyPreview");
+    const batchLink  = document.getElementById("batchLink");
 
-      const data = new FormData(frm);
-      const r1 = await fetch("/upload", {method:"POST",body:data});
-      const { job_id } = await r1.json();
+    form.onsubmit = async e => {
+      e.preventDefault();
+      controller = new AbortController();
 
-      const es = new EventSource(`/progress/${job_id}`);
-      es.onmessage = async m => {
-        const { processed, total, batch_url } = JSON.parse(m.data);
-        if (batch_url) {
-          es.close();
-          spin.style.display = "none";
+      // UI toggles
+      uploadBtn.disabled = true;
+      cancelBtn.style.display = "inline";
+      spinner.style.display = "block";
+      currentDiv.innerHTML = "";
+      batchLink.style.display = "none";
 
-          // render items
-          const r2 = await fetch(`/results/${job_id}`);
-          const { items } = await r2.json();
-          for (let it of items) {
-            const tag = it.image.match(/\.(mp4|mov|avi)$/i) 
-                      ? document.createElement("video") 
-                      : document.createElement("img");
-            if(tag.tagName==="VIDEO"){ tag.controls = true; }
-            tag.src = it.image;
-            res.appendChild(tag);
+      try {
+        const res = await fetch("/upload", {
+          method: "POST",
+          body: new FormData(form),
+          signal: controller.signal
+        });
+        const { processed, batch } = await res.json();
 
-            const a = document.createElement("a");
-            a.href = it.download_link;
-            a.target = "_blank";
-            a.innerText = "Download";
-            a.classList.add("d-block","mb-3");
-            res.appendChild(a);
+        // render current batch
+        processed.forEach(item => {
+          if (item.type === "image") {
+            let img = document.createElement("img");
+            img.src = item.thumb;
+            currentDiv.appendChild(img);
+          } else {
+            let vid = document.createElement("video");
+            vid.src = item.thumb;
+            vid.controls = true;
+            currentDiv.appendChild(vid);
           }
+          // download link
+          let a = document.createElement("a");
+          a.href = item.download;
+          a.innerText = "Download";
+          a.target = "_blank";
+          currentDiv.appendChild(a);
+        });
 
-          zdl.href = batch_url;
-          zdl.style.display = "inline-block";
+        // batch zip
+        if (batch) {
+          batchLink.href = batch;
+          batchLink.style.display = "inline-block";
         }
-      };
+
+        // append to history
+        historyDiv.appendChild(currentDiv.cloneNode(true));
+
+      } catch (err) {
+        if (err.name === "AbortError") {
+          currentDiv.innerHTML = "<p>Processing cancelled.</p>";
+        } else {
+          console.error(err);
+          currentDiv.innerHTML = "<p style='color:red'>Error occurred.</p>";
+        }
+      } finally {
+        uploadBtn.disabled = false;
+        cancelBtn.style.display = "none";
+        spinner.style.display = "none";
+      }
+    };
+
+    cancelBtn.onclick = () => {
+      if (controller) controller.abort();
     };
   </script>
 </body>
