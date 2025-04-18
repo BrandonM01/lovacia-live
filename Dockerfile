@@ -16,3 +16,7 @@ COPY . .
 
 # launch
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
+
+git mv dockerfile Dockerfile
+git commit -m "Rename dockerfile → Dockerfile"
+git push
