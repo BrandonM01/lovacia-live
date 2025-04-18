@@ -1,0 +1,28 @@
+body {
+  max-width: 800px;
+  margin: auto;
+  font-family: sans-serif;
+  padding: 2rem;
+}
+
+#origPreview img,
+#currentPreview img,
+#historyPreview img,
+#origPreview video,
+#currentPreview video,
+#historyPreview video {
+  max-width: 150px;
+  margin: .5rem;
+  border: 1px solid #ccc;
+}
+
+/* spinner overlay */
+#spinnerOverlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255,255,255,0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
