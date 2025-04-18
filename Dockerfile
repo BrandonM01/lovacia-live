@@ -1,4 +1,4 @@
-# Use the official Python image from the DockerHub as the base image
+# Use the official Python image
 FROM python:3.11-slim
 
 # Install system dependencies, including ffmpeg
@@ -10,13 +10,13 @@ WORKDIR /app
 # Copy the requirements.txt into the container
 COPY requirements.txt .
 
-# Install Python dependencies from the requirements.txt file
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the entire application into the container
 COPY . /app
 
-# Expose port 10000 to the outside world
+# Expose port 10000
 EXPOSE 10000
 
 # Start the application using uvicorn
