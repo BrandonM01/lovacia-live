@@ -1,22 +1,20 @@
-# use a slim Python base
+# Use a slim Python image
 FROM python:3.11-slim
 
-# install ffmpeg for video processing
-RUN apt-get update && apt-get install -y ffmpeg
+# Install ffmpeg for moviepy
+RUN apt-get update && \
+    apt-get install -y ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
 
-# set working dir
+# Set workdir
 WORKDIR /app
 
-# install Python deps
+# Install Python deps
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no‑cache-dir -r requirements.txt
 
-# copy our app
+# Copy app code
 COPY . .
 
-# launch
+# Run
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
-
-git mv dockerfile Dockerfile
-git commit -m "Rename dockerfile → Dockerfile"
-git push
