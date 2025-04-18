@@ -1,22 +1,20 @@
 FROM python:3.11-slim
 
-# Install dependencies (including ffmpeg)
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    libsm6 \
-    libxext6 \
-    libxrender1 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set working directory
+# Set working directory in the container
 WORKDIR /app
 
-# Copy requirements file and install dependencies
-COPY requirements.txt requirements.txt
+# Install required system dependencies for moviepy (including ffmpeg)
+RUN apt-get update && apt-get install -y ffmpeg
+
+# Install pip requirements
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all project files
-COPY . .
+# Copy the application code into the container
+COPY . /app
 
-# Run application
+# Expose port 10000
+EXPOSE 10000
+
+# Start the app
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
