@@ -5,18 +5,20 @@ body {
   padding: 2rem;
 }
 
+/* Thumbnails for images & videos */
 #origPreview img,
-#currentPreview img,
-#historyPreview img,
 #origPreview video,
+#currentPreview img,
 #currentPreview video,
+#historyPreview img,
 #historyPreview video {
   max-width: 150px;
   margin: .5rem;
   border: 1px solid #ccc;
+  border-radius: 4px;
 }
 
-/* spinner overlay */
+/* Spinner overlay */
 #spinnerOverlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
