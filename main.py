@@ -1,24 +1,24 @@
-from fastapi import FastAPI, UploadFile, File, Form, Request
-from fastapi.responses import HTMLResponse, StreamingResponse, Response, JSONResponse
+from fastapi import FastAPI, UploadFile, File, Form, Request, BackgroundTasks
+from fastapi.responses import HTMLResponse, Response, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import os, zipfile, random, asyncio, json
 from uuid import uuid4
 from PIL import Image, ImageEnhance
-from moviepy.editor import VideoFileClip, vfx
+from moviepy.editor import VideoFileClip  # ← now available
 
 app = FastAPI()
 
-# simple in‑memory job store for progress
+# In‑memory job store
 jobs: dict[str, dict] = {}
 
-# Health check (Render)
+# Health check
 @app.head("/")
 async def hc():
     return Response(status_code=200)
 
-# ensure & mount dirs
+# Ensure + mount static & uploads
 os.makedirs("static", exist_ok=True)
 os.makedirs("uploads", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -34,41 +34,63 @@ async def home(request: Request):
 
 @app.post("/upload")
 async def upload(
+    background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
     count: int              = Form(5),
     contrast_min: float     = Form(-5.0),
     contrast_max: float     = Form(5.0),
     flip: bool              = Form(False),
 ):
-    """
-    Synchronous processing of images & videos.
-    """
-    upload_dir = "uploads"
-    processed_items = []
-    all_variants = []
+    job_id = str(uuid4())
+    total  = len(files) * count
+    jobs[job_id] = {
+        "total": total,
+        "processed": 0,
+        "items": [],
+        "batch_url": None
+    }
+    background_tasks.add_task(
+        process_job, job_id, files, count, contrast_min, contrast_max, flip
+    )
+    return {"job_id": job_id}
 
-    # thresholds
-    min_contrast = 0.3    # user requested minimal contrast delta
-    min_rot      = 0.54
+
+async def process_job(job_id, files, count, contrast_min, contrast_max, flip):
+    upload_dir = "uploads"
+    job = jobs[job_id]
+
+    # minimum thresholds
+    min_contrast = 0.3
+    min_rotation = 0.54
     min_crop     = 0.01
-    rot_range    = max(count * 0.2, min_rot)
-    crop_range   = max(count * 0.001, min_crop)
+
+    rot_range  = max(count * 0.2, min_rotation)
+    crop_range = max(count * 0.001, min_crop)
 
     for file in files:
         raw_name, ext = os.path.splitext(file.filename)
-        ext = ext.lower()
         raw_path = os.path.join(upload_dir, file.filename)
         contents = await file.read()
         with open(raw_path, "wb") as f:
             f.write(contents)
 
-        variants = []
+        # If it's a video, just copy it through (or you could use moviepy to re‑encode metadata)
+        if ext.lower() in {".mp4", ".mov", ".avi"}:
+            job["items"].append({
+                "image": f"/uploads/{file.filename}",
+                "download_link": f"/uploads/{file.filename}"
+            })
+            job["processed"] += 1
+            continue
 
+        # Otherwise treat as an image
+        seen = set()
+        variants = []
         for i in range(1, count + 1):
             # pick unique params
             while True:
                 a = random.uniform(-rot_range, rot_range)
-                if abs(a) < min_rot: continue
+                if abs(a) < min_rotation: continue
 
                 c = random.uniform(contrast_min, contrast_max)
                 if abs(c) < min_contrast: continue
@@ -77,53 +99,61 @@ async def upload(
                 flip_flag = random.choice([True, False]) if flip else False
 
                 key = (round(a,2), round(c,2), round(cp,3), flip_flag)
-                if key not in variants:
-                    variants.append(key)
+                if key not in seen:
+                    seen.add(key)
                     break
 
-            out_filename = f"{raw_name}.{i}{ext}"
-            out_path = os.path.join(upload_dir, out_filename)
+            # apply transforms
+            img = Image.open(raw_path)
+            img = ImageEnhance.Contrast(img).enhance(1 + c/100)
+            img = img.rotate(a, expand=True)
+            w, h = img.size
+            cx, cy = int(w*cp), int(h*cp)
+            img = img.crop((cx, cy, w-cx, h-cy))
+            img = img.resize((w, h), Image.LANCZOS)
+            if flip_flag:
+                img = img.transpose(Image.FLIP_LEFT_RIGHT)
 
-            if ext in [".mp4", ".mov", ".avi"]:
-                # video processing
-                clip = VideoFileClip(raw_path)
-                # contrast
-                clip = clip.fx(vfx.colorx, 1 + c/100)
-                # rotation
-                clip = clip.rotate(a)
-                # crop (crop margins cp on each side)
-                w, h = clip.size
-                x1, y1 = w*cp, h*cp
-                clip = clip.crop(x1=x1, y1=y1, x2=w-x1, y2=h-y1)
-                # flip
-                if flip_flag:
-                    clip = clip.fx(vfx.mirror_x)
-                # write out
-                clip.write_videofile(out_path, audio_codec="aac", verbose=False, logger=None)
-                clip.close()
-            else:
-                # image processing
-                img = Image.open(raw_path)
-                img = ImageEnhance.Contrast(img).enhance(1 + c/100)
-                img = img.rotate(a, expand=True)
-                w, h = img.size
-                cx, cy = int(w*cp), int(h*cp)
-                img = img.crop((cx, cy, w-cx, h-cy))
-                img = img.resize((w, h), Image.LANCZOS)
-                if flip_flag:
-                    img = img.transpose(Image.FLIP_LEFT_RIGHT)
-                img.save(out_path)
+            variant = f"{raw_name}.{i}{ext}"
+            out_path = os.path.join(upload_dir, variant)
+            img.save(out_path)
+            variants.append(variant)
 
-            url = f"/uploads/{out_filename}"
-            processed_items.append({"image": url, "download_link": url})
-            all_variants.append(out_filename)
+            url = f"/uploads/{variant}"
+            job["items"].append({"image": url, "download_link": url})
+            job["processed"] += 1
 
-    # zip them
-    zip_name = f"batch_{uuid4().hex}.zip"
-    zip_path = os.path.join(upload_dir, zip_name)
-    with zipfile.ZipFile(zip_path, "w") as zf:
-        for fn in all_variants:
-            zf.write(os.path.join(upload_dir, fn), arcname=fn)
+        # zip batch
+        zip_name = f"{raw_name}_batch_{job_id}.zip"
+        zip_path = os.path.join(upload_dir, zip_name)
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            for fn in variants:
+                zf.write(os.path.join(upload_dir, fn), arcname=fn)
+        job["batch_url"] = f"/uploads/{zip_name}"
 
-    batch_url = f"/uploads/{zip_name}"
-    return {"processed": processed_items, "batch": batch_url}
+
+@app.get("/progress/{job_id}")
+async def progress_events(job_id: str):
+    if job_id not in jobs:
+        return Response(status_code=404)
+    async def generator():
+        while True:
+            job = jobs[job_id]
+            data = {
+                "processed": job["processed"],
+                "total": job["total"],
+                "batch_url": job["batch_url"]
+            }
+            yield f"data: {json.dumps(data)}\n\n"
+            if job["batch_url"] is not None:
+                break
+            await asyncio.sleep(0.5)
+    return StreamingResponse(generator(), media_type="text/event-stream")
+
+
+@app.get("/results/{job_id}")
+async def get_results(job_id: str):
+    job = jobs.get(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"error": "unknown job"})
+    return {"items": job["items"], "batch_url": job["batch_url"]}
