@@ -3,87 +3,118 @@
 <head>
   <meta charset="UTF-8">
   <title>Lovacia Bot</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-        rel="stylesheet">
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  >
   <style>
     body { max-width:800px; margin:auto; padding:2rem; }
-    #origPreview img, #results img { max-width:150px; margin:.5rem; }
+    #origPreview img, #origPreview video,
+    #imagePreview img, #imagePreview video {
+      max-width:150px; margin:.5rem; border:1px solid #ccc;
+    }
   </style>
 </head>
 <body>
-
   <h1 class="text-center mb-4">Lovacia Bot</h1>
 
-  <form id="frm" enctype="multipart/form-data" class="mb-4">
+  <form id="uploadForm" enctype="multipart/form-data" class="mb-4">
     <div class="mb-3">
       <label class="form-label">Select Images/Videos</label>
-      <input type="file" name="files" class="form-control" multiple required>
+      <input type="file" name="files" class="form-control" multiple accept="image/*,video/*" required>
     </div>
 
     <div id="origPreview" class="mb-3"><strong>Original Thumbnails:</strong></div>
 
-    <div class="row mb-3">
-      <div class="col"><label>Batch size</label>
+    <div class="row g-3 mb-3">
+      <div class="col-md-3">
+        <label class="form-label">Batch size</label>
         <select name="count" class="form-select">
           <option>5</option><option>10</option><option>25</option><option>50</option>
         </select>
       </div>
-      <div class="col"><label>Contrast Min (%)</label>
-        <input type="number" name="contrast_min" value="-5" step="0.1" class="form-control">
+      <div class="col-md-3">
+        <label class="form-label">Contrast Min (%)</label>
+        <input type="number" name="contrast_min" step="0.1" value="-5" class="form-control">
       </div>
-      <div class="col"><label>Contrast Max (%)</label>
-        <input type="number" name="contrast_max" value="5" step="0.1" class="form-control">
+      <div class="col-md-3">
+        <label class="form-label">Contrast Max (%)</label>
+        <input type="number" name="contrast_max" step="0.1" value="5" class="form-control">
       </div>
-      <div class="col d-flex align-items-end">
+      <div class="col-md-3 d-flex align-items-end">
         <div class="form-check">
-          <input class="form-check-input" type="checkbox" name="flip" id="flipChk">
-          <label class="form-check-label" for="flipChk">Flip horizontally</label>
+          <input type="checkbox" name="flip" class="form-check-input" id="flipCheck">
+          <label class="form-check-label" for="flipCheck">Flip horizontally</label>
         </div>
       </div>
     </div>
 
-    <button class="btn btn-primary">Upload & Process</button>
+    <button class="btn btn-primary" id="uploadBtn">Upload &amp; Process</button>
   </form>
 
-  <h2>Results</h2>
-  <div id="results" class="d-flex flex-wrap"></div>
-  <a id="dlzip" class="btn btn-success mt-3" href="#" style="display:none">
-    Download ZIP of All Variations
+  <h2>Processed Media</h2>
+  <div id="imagePreview" class="d-flex flex-wrap"></div>
+  <a id="batchDownload" class="btn btn-success mt-3" href="#" download style="display:none">
+    Download All Variations (ZIP)
   </a>
 
   <script>
-    const form = document.getElementById("frm");
-    const orig = document.getElementById("origPreview");
-    const results = document.getElementById("results");
-    const dlzip = document.getElementById("dlzip");
+    const form       = document.getElementById('uploadForm');
+    const fileInput  = form.files;
+    const origPrev   = document.getElementById('origPreview');
+    const uploadBtn  = document.getElementById('uploadBtn');
+    const previewBox = document.getElementById('imagePreview');
+    const batchLink  = document.getElementById('batchDownload');
 
     form.files.onchange = () => {
-      orig.innerHTML = "<strong>Original Thumbnails:</strong>";
-      Array.from(form.files.files).forEach(f=>{
-        const img = document.createElement("img");
-        img.src = URL.createObjectURL(f);
-        orig.appendChild(img);
+      origPrev.innerHTML = '<strong>Original Thumbnails:</strong>';
+      Array.from(form.files.files).forEach(f => {
+        let el;
+        if (f.type.startsWith('video/')) {
+          el = document.createElement('video');
+          el.src = URL.createObjectURL(f);
+          el.controls = false; el.muted = true; el.loop = true;
+        } else {
+          el = document.createElement('img');
+          el.src = URL.createObjectURL(f);
+        }
+        origPrev.appendChild(el);
       });
     };
 
     form.onsubmit = async e => {
       e.preventDefault();
-      results.innerHTML = "<p>Processing…</p>";
-      dlzip.style.display = "none";
+      uploadBtn.disabled = true;
+      previewBox.innerHTML = '<p>Processing…</p>';
+      batchLink.style.display = 'none';
 
-      const data = new FormData(form);
-      const res = await fetch("/upload", { method:"POST", body:data });
-      const js  = await res.json();
+      const res = await fetch('/upload', { method:'POST', body:new FormData(form) });
+      const { processed, batch } = await res.json();
 
-      results.innerHTML = "";
-      js.items.forEach(it=>{
-        const img = document.createElement("img");
-        img.src = it.url;
-        results.appendChild(img);
+      previewBox.innerHTML = '';
+      processed.forEach(item => {
+        let el;
+        if (item.image.match(/\.(mp4|mov|avi)$/)) {
+          el = document.createElement('video');
+          el.src = item.image;
+          el.controls = true;
+        } else {
+          el = document.createElement('img');
+          el.src = item.image;
+        }
+        previewBox.appendChild(el);
+
+        const a = document.createElement('a');
+        a.href = item.download_link;
+        a.innerText = 'Download';
+        a.target = '_blank';
+        a.classList.add('d-block','mb-3');
+        previewBox.appendChild(a);
       });
 
-      dlzip.href = js.zip_url;
-      dlzip.style.display = "inline-block";
+      batchLink.href = batch;
+      batchLink.style.display = 'inline-block';
+      uploadBtn.disabled = false;
     };
   </script>
 </body>
