@@ -1,10 +1,10 @@
 FROM python:3.11-slim
 
+# Install required system dependencies (including ffmpeg)
+RUN apt-get update && apt-get install -y ffmpeg
+
 # Set working directory in the container
 WORKDIR /app
-
-# Install required system dependencies for moviepy (including ffmpeg)
-RUN apt-get update && apt-get install -y ffmpeg
 
 # Install pip requirements
 COPY requirements.txt .
