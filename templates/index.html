@@ -2,27 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Lovacia Bot</title>
-  <style>
-    body { max-width:800px; margin:auto; font-family:sans-serif; padding:2rem }
-    #origPreview img,
-    #currentPreview img,
-    #historyPreview img {
-      max-width:150px;
-      margin:.5rem;
-      border:1px solid #ccc;
-    }
-    #origPreview video,
-    #currentPreview video,
-    #historyPreview video {
-      max-width:150px;
-      margin:.5rem;
-      border:1px solid #ccc;
-    }
-    .spinner { margin:2rem auto; text-align:center; display:none; }
-  </style>
+  <title>Lovacia Bot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+
   <h1 style="text-align:center">Lovacia Bot</h1>
 
   <form id="uploadForm" enctype="multipart/form-data">
@@ -51,57 +36,57 @@
       <input type="checkbox" name="flip">
     </label>
 
-    <button type="submit" id="uploadBtn">Upload & Process</button>
+    <button type="submit" id="uploadBtn">Upload &amp; Process</button>
     <button type="button" id="cancelBtn" style="display:none">Cancel</button>
   </form>
 
-  <div class="spinner" id="spinner">
-    <svg width="40" height="40" viewBox="0 0 50 50">
-      <circle cx="25" cy="25" r="20" stroke="#888" stroke-width="5" fill="none"></circle>
-    </svg>
-    <div>Processing…</div>
+  <!-- Spinner overlay -->
+  <div id="spinnerOverlay">
+    <div class="spinner-border" role="status" style="width:3rem; height:3rem;">
+      <span class="visually-hidden">Processing…</span>
+    </div>
   </div>
 
   <!-- Current batch -->
   <h2>Current Batch</h2>
-  <div id="currentPreview"></div>
+  <div id="currentPreview" class="d-flex flex-wrap"></div>
   <a id="batchLink" href="#" download style="display:none">
     Download All Variations (ZIP)
   </a>
 
-  <!-- History of previous -->
+  <!-- History -->
   <h2>History</h2>
-  <div id="historyPreview"></div>
+  <div id="historyPreview" class="d-flex flex-wrap"></div>
 
 
   <script>
-    // preview originals
-    const fileInput = document.getElementById("fileInput");
-    const origPreview = document.getElementById("origPreview");
-    fileInput.onchange = () => {
-      origPreview.innerHTML = "<strong>Original Thumbnails:</strong>";
-      Array.from(fileInput.files).forEach(file => {
-        if (file.type.startsWith("image/")) {
-          let img = document.createElement("img");
-          img.src = URL.createObjectURL(file);
-          origPreview.appendChild(img);
-        } else if (file.type.startsWith("video/")) {
-          let vid = document.createElement("video");
-          vid.src = URL.createObjectURL(file);
-          vid.controls = false;
-          origPreview.appendChild(vid);
-        }
-      });
-    };
-
-    let controller;
     const form       = document.getElementById("uploadForm");
+    const fileInput  = document.getElementById("fileInput");
+    const origPrev   = document.getElementById("origPreview");
     const uploadBtn  = document.getElementById("uploadBtn");
     const cancelBtn  = document.getElementById("cancelBtn");
-    const spinner    = document.getElementById("spinner");
+    const spinner    = document.getElementById("spinnerOverlay");
     const currentDiv = document.getElementById("currentPreview");
     const historyDiv = document.getElementById("historyPreview");
     const batchLink  = document.getElementById("batchLink");
+    let controller;
+
+    // Preview originals
+    fileInput.onchange = () => {
+      origPrev.innerHTML = "<strong>Original Thumbnails:</strong>";
+      Array.from(fileInput.files).forEach(f => {
+        let el;
+        if (f.type.startsWith("video/")) {
+          el = document.createElement("video");
+          el.src = URL.createObjectURL(f);
+          el.controls = false;
+        } else {
+          el = document.createElement("img");
+          el.src = URL.createObjectURL(f);
+        }
+        origPrev.appendChild(el);
+      });
+    };
 
     form.onsubmit = async e => {
       e.preventDefault();
@@ -110,59 +95,63 @@
       // UI toggles
       uploadBtn.disabled = true;
       cancelBtn.style.display = "inline";
-      spinner.style.display = "block";
+      spinner.style.display = "flex";
       currentDiv.innerHTML = "";
       batchLink.style.display = "none";
 
-      try {
-        const res = await fetch("/upload", {
-          method: "POST",
-          body: new FormData(form),
-          signal: controller.signal
-        });
-        const { processed, batch } = await res.json();
+      // Kick off the job
+      const res1 = await fetch("/upload", {
+        method: "POST",
+        body: new FormData(form),
+        signal: controller.signal
+      });
+      const { job_id } = await res1.json();
 
-        // render current batch
-        processed.forEach(item => {
-          if (item.type === "image") {
-            let img = document.createElement("img");
-            img.src = item.thumb;
-            currentDiv.appendChild(img);
-          } else {
-            let vid = document.createElement("video");
-            vid.src = item.thumb;
-            vid.controls = true;
-            currentDiv.appendChild(vid);
+      // Listen for SSE progress
+      const es = new EventSource(`/progress/${job_id}`);
+      es.onmessage = async msg => {
+        const { processed, total, batch_url } = JSON.parse(msg.data);
+        if (batch_url || processed >= total) {
+          es.close();
+          spinner.style.display = "none";
+          cancelBtn.style.display = "none";
+          uploadBtn.disabled = false;
+
+          // Fetch results
+          const res2 = await fetch(`/results/${job_id}`);
+          const { items, batch_url: zip } = await res2.json();
+
+          // Render current batch
+          currentDiv.innerHTML = "";
+          items.forEach(it => {
+            let el;
+            if (it.type === "video") {
+              el = document.createElement("video");
+              el.src = it.thumb;
+              el.controls = true;
+            } else {
+              el = document.createElement("img");
+              el.src = it.thumb;
+            }
+            currentDiv.appendChild(el);
+
+            const a = document.createElement("a");
+            a.href = it.download;
+            a.innerText = "Download";
+            a.target = "_blank";
+            currentDiv.appendChild(a);
+          });
+
+          // Show ZIP if any
+          if (zip) {
+            batchLink.href = zip;
+            batchLink.style.display = "inline-block";
           }
-          // download link
-          let a = document.createElement("a");
-          a.href = item.download;
-          a.innerText = "Download";
-          a.target = "_blank";
-          currentDiv.appendChild(a);
-        });
 
-        // batch zip
-        if (batch) {
-          batchLink.href = batch;
-          batchLink.style.display = "inline-block";
+          // Append to history
+          historyDiv.appendChild(currentDiv.cloneNode(true));
         }
-
-        // append to history
-        historyDiv.appendChild(currentDiv.cloneNode(true));
-
-      } catch (err) {
-        if (err.name === "AbortError") {
-          currentDiv.innerHTML = "<p>Processing cancelled.</p>";
-        } else {
-          console.error(err);
-          currentDiv.innerHTML = "<p style='color:red'>Error occurred.</p>";
-        }
-      } finally {
-        uploadBtn.disabled = false;
-        cancelBtn.style.display = "none";
-        spinner.style.display = "none";
-      }
+      };
     };
 
     cancelBtn.onclick = () => {
