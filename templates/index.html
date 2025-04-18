@@ -3,8 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <title>Lovacia Bot</title>
-  <!-- Bootstrap CSS for styling/buttons/progress bar -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Bootstrap CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+    integrity="sha384-ENjdO4Dr2bkBIFxQpeoA6V2kRjhaSM0Ej4bfnma1mK7x9Ifjh"
+    crossorigin="anonymous"
+  >
+
   <style>
     body {
       max-width: 800px;
@@ -22,7 +30,7 @@
 </head>
 <body>
 
-  <h1 class="mb-4 text-center">Lovacia Bot</h1>
+  <h1 class="text-center mb-4">Lovacia Bot</h1>
 
   <form id="uploadForm" enctype="multipart/form-data">
     <div class="mb-3">
@@ -67,13 +75,13 @@
       </div>
     </div>
 
-    <button type="submit" id="uploadBtn" class="btn btn-primary">Upload & Process</button>
+    <button type="submit" id="uploadBtn" class="btn btn-primary">Upload &amp; Process</button>
     <button type="button" id="cancelBtn" class="btn btn-secondary ms-2" style="display:none;">
       Cancel
     </button>
   </form>
 
-  <!-- Animated, indeterminate progress bar -->
+  <!-- Indeterminate animated progress bar -->
   <div id="loadingBar" class="progress my-4" style="display:none;">
     <div
       class="progress-bar progress-bar-striped progress-bar-animated w-100"
@@ -83,18 +91,34 @@
 
   <h2>Processed Images</h2>
   <div id="imagePreview" class="d-flex flex-wrap"></div>
+
   <a
     id="batchDownload"
     class="btn btn-success mt-3"
     href="#"
     download
     style="display:none"
-  >Download All Variations (ZIP)</a>
+  >Download All Variations (ZIP)</a>
+
+  <!-- Bootstrap JS bundle (for any components) -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-EN2FE1vA6SiDghi0P"
+    crossorigin="anonymous"
+  ></script>
 
   <script>
-    // Show original thumbnails on file select
-    const fileInput = document.getElementById("fileInput");
+    const fileInput   = document.getElementById("fileInput");
     const origPreview = document.getElementById("origPreview");
+    const form        = document.getElementById("uploadForm");
+    const uploadBtn   = document.getElementById("uploadBtn");
+    const cancelBtn   = document.getElementById("cancelBtn");
+    const loadingBar  = document.getElementById("loadingBar");
+    const preview     = document.getElementById("imagePreview");
+    const batchLink   = document.getElementById("batchDownload");
+    let controller;
+
+    // Show original thumbnails
     fileInput.onchange = () => {
       origPreview.innerHTML = "<strong>Original Thumbnails:</strong>";
       Array.from(fileInput.files).forEach(file => {
@@ -104,48 +128,33 @@
       });
     };
 
-    let controller;
-    const form = document.getElementById("uploadForm");
-    const uploadBtn = document.getElementById("uploadBtn");
-    const cancelBtn = document.getElementById("cancelBtn");
-    const loadingBar = document.getElementById("loadingBar");
-    const preview = document.getElementById("imagePreview");
-    const batchLink = document.getElementById("batchDownload");
-
     form.onsubmit = async e => {
       e.preventDefault();
       controller = new AbortController();
 
-      // Toggle UI
+      // UI toggles
       uploadBtn.disabled = true;
       cancelBtn.style.display = "inline-block";
       loadingBar.style.display = "block";
       preview.innerHTML = "";
       batchLink.style.display = "none";
 
-      const data = new FormData(form);
       try {
         const res = await fetch("/upload", {
           method: "POST",
-          body: data,
+          body: new FormData(form),
           signal: controller.signal
         });
         const { processed, batch } = await res.json();
 
-        // Render results
+        // render results
         processed.forEach(item => {
           const img = document.createElement("img");
           img.src = item.image;
           preview.appendChild(img);
-
-          const a = document.createElement("a");
-          a.href = item.download_link;
-          a.innerText = "Download";
-          a.target = "_blank";
-          a.classList.add("d-block","ms-1","mb-3");
-          preview.appendChild(a);
         });
 
+        // show ZIP link
         batchLink.href = batch;
         batchLink.style.display = "inline-block";
 
