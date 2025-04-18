@@ -15,166 +15,180 @@
 
   <style>
     body {
-      max-width: 800px;
-      margin: auto;
-      font-family: sans-serif;
+      background-color: #f8f9fa;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       padding: 2rem;
+    }
+    .card {
+      width: 100%;
+      max-width: 700px;
     }
     #origPreview img,
     #imagePreview img {
       max-width: 150px;
       margin: .5rem;
-      border: 1px solid #ccc;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    #spinnerOverlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(255,255,255,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1050;
     }
   </style>
 </head>
 <body>
 
-  <h1 class="text-center mb-4">Lovacia Bot</h1>
+<div id="spinnerOverlay">
+  <div class="spinner-border text-primary" role="status" style="width:4rem; height:4rem;">
+    <span class="visually-hidden">Processing...</span>
+  </div>
+</div>
 
-  <form id="uploadForm" enctype="multipart/form-data">
-    <div class="mb-3">
-      <label class="form-label">Select images</label>
-      <input
-        type="file"
-        class="form-control"
-        id="fileInput"
-        name="files"
-        multiple
-        required
-      >
-    </div>
+<div class="card shadow-sm">
+  <div class="card-body">
+    <h1 class="card-title text-center mb-4">Lovacia Bot</h1>
 
-    <div id="origPreview" class="mb-3">
-      <strong>Original Thumbnails:</strong>
-    </div>
+    <form id="uploadForm" class="mb-4">
+      <div class="mb-3">
+        <label for="fileInput" class="form-label">Select images</label>
+        <input type="file" class="form-control" id="fileInput" name="files" multiple required>
+      </div>
 
-    <div class="row mb-3">
-      <div class="col-md-3">
-        <label class="form-label">Batch size</label>
-        <select name="count" class="form-select">
-          <option value="5">5</option>
-          <option value="10">10</option>
-          <option value="25">25</option>
-          <option value="50">50</option>
-        </select>
+      <div id="origPreview" class="mb-3">
+        <strong>Original Thumbnails:</strong>
       </div>
-      <div class="col-md-3">
-        <label class="form-label">Contrast Min (%)</label>
-        <input type="number" name="contrast_min" class="form-control" value="-5.0" step="0.1">
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">Contrast Max (%)</label>
-        <input type="number" name="contrast_max" class="form-control" value="5.0" step="0.1">
-      </div>
-      <div class="col-md-3 d-flex align-items-end">
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" name="flip" id="flipCheck">
-          <label class="form-check-label" for="flipCheck">Flip horizontally</label>
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-3">
+          <label class="form-label">Batch size</label>
+          <select name="count" class="form-select">
+            <option value="5">5</option>
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Contrast Min (%)</label>
+          <input type="number" name="contrast_min" class="form-control" value="-5.0" step="0.1">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Contrast Max (%)</label>
+          <input type="number" name="contrast_max" class="form-control" value="5.0" step="0.1">
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="flip" id="flipCheck">
+            <label class="form-check-label" for="flipCheck">Flip horizontally</label>
+          </div>
         </div>
       </div>
+
+      <div class="d-flex justify-content-center">
+        <button type="submit" id="uploadBtn" class="btn btn-primary me-2">Upload &amp; Process</button>
+        <button type="button" id="cancelBtn" class="btn btn-secondary" style="display:none;">Cancel</button>
+      </div>
+    </form>
+
+    <hr>
+
+    <h5>Processed Images</h5>
+    <div id="imagePreview" class="d-flex flex-wrap justify-content-center mb-3"></div>
+
+    <div class="text-center">
+      <a id="batchDownload" class="btn btn-success" href="#" download style="display:none;">
+        Download All Variations (ZIP)
+      </a>
     </div>
-
-    <button type="submit" id="uploadBtn" class="btn btn-primary">Upload &amp; Process</button>
-    <button type="button" id="cancelBtn" class="btn btn-secondary ms-2" style="display:none;">
-      Cancel
-    </button>
-  </form>
-
-  <!-- Indeterminate animated progress bar -->
-  <div id="loadingBar" class="progress my-4" style="display:none;">
-    <div
-      class="progress-bar progress-bar-striped progress-bar-animated w-100"
-      role="progressbar"
-    >Processing…</div>
   </div>
+</div>
 
-  <h2>Processed Images</h2>
-  <div id="imagePreview" class="d-flex flex-wrap"></div>
+<!-- Bootstrap JS -->
+<script
+  src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+  integrity="sha384-EN2FE1vA6SiDghi0P"
+  crossorigin="anonymous"
+></script>
 
-  <a
-    id="batchDownload"
-    class="btn btn-success mt-3"
-    href="#"
-    download
-    style="display:none"
-  >Download All Variations (ZIP)</a>
+<script>
+  const fileInput   = document.getElementById("fileInput");
+  const origPreview = document.getElementById("origPreview");
+  const form        = document.getElementById("uploadForm");
+  const uploadBtn   = document.getElementById("uploadBtn");
+  const cancelBtn   = document.getElementById("cancelBtn");
+  const spinner     = document.getElementById("spinnerOverlay");
+  const preview     = document.getElementById("imagePreview");
+  const batchLink   = document.getElementById("batchDownload");
+  let controller;
 
-  <!-- Bootstrap JS bundle (for any components) -->
-  <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-    integrity="sha384-EN2FE1vA6SiDghi0P"
-    crossorigin="anonymous"
-  ></script>
+  // show original thumbnails
+  fileInput.onchange = () => {
+    origPreview.innerHTML = "<strong>Original Thumbnails:</strong>";
+    Array.from(fileInput.files).forEach(file => {
+      const img = document.createElement("img");
+      img.src = URL.createObjectURL(file);
+      origPreview.appendChild(img);
+    });
+  };
 
-  <script>
-    const fileInput   = document.getElementById("fileInput");
-    const origPreview = document.getElementById("origPreview");
-    const form        = document.getElementById("uploadForm");
-    const uploadBtn   = document.getElementById("uploadBtn");
-    const cancelBtn   = document.getElementById("cancelBtn");
-    const loadingBar  = document.getElementById("loadingBar");
-    const preview     = document.getElementById("imagePreview");
-    const batchLink   = document.getElementById("batchDownload");
-    let controller;
+  form.onsubmit = async e => {
+    e.preventDefault();
+    controller = new AbortController();
 
-    // Show original thumbnails
-    fileInput.onchange = () => {
-      origPreview.innerHTML = "<strong>Original Thumbnails:</strong>";
-      Array.from(fileInput.files).forEach(file => {
-        const img = document.createElement("img");
-        img.src = URL.createObjectURL(file);
-        origPreview.appendChild(img);
+    // show spinner, disable buttons
+    spinner.style.display = "flex";
+    uploadBtn.disabled   = true;
+    cancelBtn.style.display = "inline-block";
+    preview.innerHTML      = "";
+    batchLink.style.display= "none";
+
+    try {
+      const res = await fetch("/upload", {
+        method: "POST",
+        body: new FormData(form),
+        signal: controller.signal
       });
-    };
+      if (!res.ok) throw new Error(res.statusText);
+      const { processed, batch } = await res.json();
 
-    form.onsubmit = async e => {
-      e.preventDefault();
-      controller = new AbortController();
+      // render thumbnails
+      processed.forEach(item => {
+        const img = document.createElement("img");
+        img.src = item.image;
+        preview.appendChild(img);
+      });
 
-      // UI toggles
-      uploadBtn.disabled = true;
-      cancelBtn.style.display = "inline-block";
-      loadingBar.style.display = "block";
-      preview.innerHTML = "";
-      batchLink.style.display = "none";
+      // show ZIP link
+      batchLink.href = batch;
+      batchLink.style.display = "inline-block";
 
-      try {
-        const res = await fetch("/upload", {
-          method: "POST",
-          body: new FormData(form),
-          signal: controller.signal
-        });
-        const { processed, batch } = await res.json();
-
-        // render results
-        processed.forEach(item => {
-          const img = document.createElement("img");
-          img.src = item.image;
-          preview.appendChild(img);
-        });
-
-        // show ZIP link
-        batchLink.href = batch;
-        batchLink.style.display = "inline-block";
-
-      } catch (err) {
-        if (err.name === "AbortError") {
-          preview.innerHTML = "<p>Processing cancelled.</p>";
-        } else {
-          console.error(err);
-          preview.innerHTML = "<p class='text-danger'>Error occurred.</p>";
-        }
-      } finally {
-        uploadBtn.disabled = false;
-        cancelBtn.style.display = "none";
-        loadingBar.style.display = "none";
+    } catch (err) {
+      if (err.name === "AbortError") {
+        preview.innerHTML = `<p class="text-warning">Processing cancelled.</p>`;
+      } else {
+        console.error(err);
+        preview.innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
       }
-    };
+    } finally {
+      spinner.style.display    = "none";
+      uploadBtn.disabled       = false;
+      cancelBtn.style.display  = "none";
+    }
+  };
 
-    cancelBtn.onclick = () => {
-      if (controller) controller.abort();
-    };
-  </script>
+  cancelBtn.onclick = () => {
+    if (controller) controller.abort();
+  };
+</script>
+
 </body>
 </html>
