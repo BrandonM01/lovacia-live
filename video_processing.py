@@ -1,18 +1,11 @@
-import moviepy.editor as mp
+import os
+from moviepy.editor import VideoFileClip
 
-def process_video(input_video_path, trim_start=5, trim_end=10, flip=False):
-    # Load the video
-    video = mp.VideoFileClip(input_video_path)
-    
-    # Trim the video
-    video = video.subclip(trim_start, trim_end)
-    
-    # Optionally flip the video
-    if flip:
-        video = video.fx(mp.vfx.mirror_x)
-    
-    # Save the processed video
-    output_video_path = "processed_" + input_video_path
-    video.write_videofile(output_video_path, codec="libx264")
-
-    return output_video_path  # Return the processed video path
+def process_video(path, trim_start, trim_end, flip, suffix=""):
+    clip = VideoFileClip(path)
+    if trim_end: clip = clip.subclip(trim_start, trim_end)
+    if flip:    clip = clip.fx(vfx.mirror_x)
+    out_name = os.path.splitext(os.path.basename(path))[0] + suffix + ".mp4"
+    out_path = os.path.join("uploads", out_name)
+    clip.write_videofile(out_path, codec="libx264")
+    return out_name
