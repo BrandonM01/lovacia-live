@@ -1,22 +1,18 @@
+import os, random
 from moviepy.editor import VideoFileClip, vfx
 
-def process_video(
-    path: str,
-    trim_start: float = 0,
-    trim_end: float = None,
-    flip: bool = False
-) -> str:
-    clip = VideoFileClip(path)
-
-    # optional trim
-    if trim_end is not None:
-        clip = clip.subclip(trim_start, trim_end)
-
-    # optional flip
-    if flip:
-        clip = clip.fx(vfx.mirror_x)
-
-    # write file
-    output = "processed_video.mp4"
-    clip.write_videofile(output, codec="libx264", audio_codec="aac")
-    return output
+def process_video_variants(path, base, ext, count, flip, trim_start, trim_end):
+    out = []
+    clip0 = VideoFileClip(path)
+    # apply trim once
+    if trim_end > 0:
+        clip0 = clip0.subclip(trim_start, trim_end)
+    for i in range(1, count+1):
+        clip = clip0
+        if flip:
+            clip = clip.fx(vfx.mirror_x)
+        fname = f"{base}_vid{i}{ext}"
+        clip.write_videofile(os.path.join("uploads", fname), audio_codec="aac", verbose=False, logger=None)
+        out.append(fname)
+    clip0.close()
+    return out
