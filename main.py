@@ -1,56 +1,84 @@
 import os
-import uuid
-from fastapi import FastAPI, File, UploadFile, Form
-from fastapi.responses import RedirectResponse
+import traceback
+from fastapi import FastAPI, Request, UploadFile, File
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.requests import Request
 
+from image_processing import process_image
 from video_processing import process_video_variants
-from image_processing import process_image_variants
+
+# --- Configuration --------------------------------------------------------
+
+UPLOAD_DIR    = "static/uploads"
+PROCESSED_DIR = "static/processed"
+THUMB_DIR     = "static/thumbs"
+TEMPLATE_DIR  = "templates"
+
+# --- App setup ------------------------------------------------------------
 
 app = FastAPI()
 
-# mount the static directory
+# mount static folder so /static/... serves files
 app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
 
-UPLOAD_DIR = "static/uploads"
-PROCESSED_DIR = "static/processed"
+# set up Jinja2 templates
+templates = Jinja2Templates(directory=TEMPLATE_DIR)
 
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(PROCESSED_DIR, exist_ok=True)
+# ensure our directories exist
+for d in (UPLOAD_DIR, PROCESSED_DIR, THUMB_DIR):
+    os.makedirs(d, exist_ok=True)
 
-def list_gallery():
-    return sorted(os.listdir(PROCESSED_DIR))
+# --- Routes ---------------------------------------------------------------
 
 @app.get("/")
 async def index(request: Request):
-    gallery = list_gallery()
+    # list thumbnails in your thumb folder to show history/gallery
+    thumbs = sorted(os.listdir(THUMB_DIR))
     return templates.TemplateResponse("index.html", {
         "request": request,
-        "gallery": gallery,
+        "thumbs": thumbs,
     })
 
 @app.post("/process-image")
 async def upload_image(request: Request, file: UploadFile = File(...)):
-    ext = os.path.splitext(file.filename)[1]
-    fname = f"{uuid.uuid4().hex}{ext}"
-    raw_path = os.path.join(UPLOAD_DIR, fname)
-    with open(raw_path, "wb") as f:
-        f.write(await file.read())
+    try:
+        # save raw upload
+        raw_path = os.path.join(UPLOAD_DIR, file.filename)
+        with open(raw_path, "wb") as f:
+            f.write(await file.read())
 
-    # process and get list of output filenames
-    out_files = process_image_variants(raw_path, PROCESSED_DIR)
-    return RedirectResponse(url="/", status_code=303)
+        # run your existing image pipeline
+        out_files = process_image(raw_path)  
+        # process_image() should return a list of output file paths or URLs
+
+        return {"processed": out_files}
+
+    except Exception as e:
+        # print full Python traceback into the Render log
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
 
 @app.post("/process-video")
 async def upload_video(request: Request, file: UploadFile = File(...)):
-    ext = os.path.splitext(file.filename)[1]
-    fname = f"{uuid.uuid4().hex}{ext}"
-    raw_path = os.path.join(UPLOAD_DIR, fname)
-    with open(raw_path, "wb") as f:
-        f.write(await file.read())
+    try:
+        # save raw upload
+        raw_path = os.path.join(UPLOAD_DIR, file.filename)
+        with open(raw_path, "wb") as f:
+            f.write(await file.read())
 
-    out_files = process_video_variants(raw_path, PROCESSED_DIR)
-    return RedirectResponse(url="/", status_code=303)
+        # NOTE: process_video_variants now only takes 1 argument
+        variants = process_video_variants(raw_path)
+        # variants should be a dict or list describing your different video outputs
+
+        return {"variants": variants}
+
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
