@@ -1,69 +1,51 @@
-from fastapi import FastAPI, UploadFile, File, Form, Request
-from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query
+from fastapi.responses import FileResponse
 from image_processing import process_image
 from video_processing import process_video
+import os
 
 app = FastAPI()
 
-# 1) Mount /static → ./static
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Healthcheck
+@app.get("/")
+async def healthcheck():
+    return {"status": "running"}
 
-# 2) Set up Jinja2Templates to serve index.html
-templates = Jinja2Templates(directory="templates")
-
-
-# Health‐check for Uptime monitors (HEAD and GET)
-@app.head("/")
-async def _healthcheck_head():
-    return {"status": "ok"}
-
-@app.get("/", response_class=HTMLResponse)
-async def get_index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
-
-
-# 3) Image endpoint
+# Image endpoint
 @app.post("/process-image/")
 async def process_image_endpoint(
     file: UploadFile = File(...),
-    count: int = Form(5),
-    contrast_min: float = Form(-5.0),
-    contrast_max: float = Form(5.0),
-    flip: bool = Form(False),
+    flip: bool = Query(False),
+    contrast_min: float = Query(-5.0),
+    contrast_max: float = Query(5.0),
 ):
-    in_path = f"/tmp/{file.filename}"
-    with open(in_path, "wb") as f:
+    # save upload
+    tmp = "temp.jpg"
+    with open(tmp, "wb") as f:
         f.write(await file.read())
 
-    out_path = process_image(
-        input_path=in_path,
-        flip=flip,
-        contrast_min=contrast_min,
-        contrast_max=contrast_max,
-        count=count,
-    )
-    return FileResponse(out_path, media_type="image/jpeg", filename=out_path.split("/")[-1])
+    try:
+        out = process_image(tmp, flip=flip, contrast_min=contrast_min, contrast_max=contrast_max)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
+    return FileResponse(out, media_type="image/jpeg", filename=os.path.basename(out))
 
-# 4) Video endpoint
+# Video endpoint
 @app.post("/process-video/")
 async def process_video_endpoint(
     file: UploadFile = File(...),
-    trim_start: float = Form(0.0),
-    trim_end: float = Form(0.0),
-    flip: bool = Form(False),
+    trim_start: float = Query(0.0),
+    trim_end: float | None = Query(None),
+    flip: bool = Query(False),
 ):
-    in_path = f"/tmp/{file.filename}"
-    with open(in_path, "wb") as f:
+    tmp = "temp.mp4"
+    with open(tmp, "wb") as f:
         f.write(await file.read())
 
-    out_path = process_video(
-        input_path=in_path,
-        trim_start=trim_start,
-        trim_end=trim_end,
-        flip=flip,
-    )
-    return FileResponse(out_path, media_type="video/mp4", filename=out_path.split("/")[-1])
+    try:
+        out = process_video(tmp, trim_start=trim_start, trim_end=trim_end, flip=flip)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return FileResponse(out, media_type="video/mp4", filename=os.path.basename(out))
