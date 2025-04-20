@@ -1,17 +1,22 @@
-from moviepy.editor import VideoFileClip, vfx  # note import vfx for flipping
+from moviepy.editor import VideoFileClip, vfx
 
 def process_video(
-    input_path: str,
+    path: str,
     trim_start: float = 0,
     trim_end: float = None,
-    flip: bool = False,
+    flip: bool = False
 ) -> str:
-    clip = VideoFileClip(input_path)
+    clip = VideoFileClip(path)
+
+    # optional trim
     if trim_end is not None:
         clip = clip.subclip(trim_start, trim_end)
+
+    # optional flip
     if flip:
-        clip = clip.fx(vfx.mirror_x)  # mirror horizontally
-    output_path = "processed_video.mp4"
-    clip.write_videofile(output_path, audio_codec="aac")
-    clip.close()
-    return output_path
+        clip = clip.fx(vfx.mirror_x)
+
+    # write file
+    output = "processed_video.mp4"
+    clip.write_videofile(output, codec="libx264", audio_codec="aac")
+    return output
