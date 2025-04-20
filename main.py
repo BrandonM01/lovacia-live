@@ -1,79 +1,56 @@
-from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import FileResponse
-import shutil
 import os
-from image_processing import process_image_variants
-from video_processing import process_video_variants
-
-app = FastAPI()
-
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-@app.post("/upload-image/")
-async def upload_image(file: UploadFile = File(...)):
-    path = os.path.join(UPLOAD_DIR, file.filename)
-    with open(path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-    variants = process_image_variants(path)
-    return {"original": path, "variants": variants}
-
-@app.post("/upload-video/")
-async def upload_video(file: UploadFile = File(...)):
-    path = os.path.join(UPLOAD_DIR, file.filename)
-    with open(path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-    variants = process_video_variants(path)
-    return {"original": path, "variants": variants}
-
-@app.get("/download/")
-def download(file_path: str):
-    return FileResponse(file_path, media_type="application/octet-stream", filename=os.path.basename(file_path))
-
-from fastapi import FastAPI, Request, File, UploadFile
+import uuid
+from fastapi import FastAPI, File, UploadFile, Form
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import FileResponse
-import os, shutil
+from starlette.requests import Request
 
-from image_processing import process_image_variants
 from video_processing import process_video_variants
+from image_processing import process_image_variants
 
 app = FastAPI()
 
-#  ── serve your CSS/JS under /static
+# mount the static directory
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-#  ── point Jinja at your templates dir
 templates = Jinja2Templates(directory="templates")
 
-UPLOAD_DIR = "uploads"
+UPLOAD_DIR = "static/uploads"
+PROCESSED_DIR = "static/processed"
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(PROCESSED_DIR, exist_ok=True)
+
+def list_gallery():
+    return sorted(os.listdir(PROCESSED_DIR))
 
 @app.get("/")
-def home(request: Request):
-    """
-    Renders templates/index.html with a simple upload form.
-    """
-    return templates.TemplateResponse("index.html", {"request": request})
+async def index(request: Request):
+    gallery = list_gallery()
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "gallery": gallery,
+    })
 
-@app.post("/upload-image/")
-async def upload_image(file: UploadFile = File(...)):
-    path = os.path.join(UPLOAD_DIR, file.filename)
-    with open(path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-    variants = process_image_variants(path)
-    return {"original": path, "variants": variants}
+@app.post("/process-image")
+async def upload_image(request: Request, file: UploadFile = File(...)):
+    ext = os.path.splitext(file.filename)[1]
+    fname = f"{uuid.uuid4().hex}{ext}"
+    raw_path = os.path.join(UPLOAD_DIR, fname)
+    with open(raw_path, "wb") as f:
+        f.write(await file.read())
 
-@app.post("/upload-video/")
-async def upload_video(file: UploadFile = File(...)):
-    path = os.path.join(UPLOAD_DIR, file.filename)
-    with open(path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-    variants = process_video_variants(path)
-    return {"original": path, "variants": variants}
+    # process and get list of output filenames
+    out_files = process_image_variants(raw_path, PROCESSED_DIR)
+    return RedirectResponse(url="/", status_code=303)
 
-@app.get("/download/")
-def download(file_path: str):
-    return FileResponse(file_path, media_type="application/octet-stream", filename=os.path.basename(file_path))
+@app.post("/process-video")
+async def upload_video(request: Request, file: UploadFile = File(...)):
+    ext = os.path.splitext(file.filename)[1]
+    fname = f"{uuid.uuid4().hex}{ext}"
+    raw_path = os.path.join(UPLOAD_DIR, fname)
+    with open(raw_path, "wb") as f:
+        f.write(await file.read())
 
+    out_files = process_video_variants(raw_path, PROCESSED_DIR)
+    return RedirectResponse(url="/", status_code=303)
