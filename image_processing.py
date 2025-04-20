@@ -1,28 +1,29 @@
 import os
+import piexif
 from PIL import Image
 
-def process_image_variants(image_path: str) -> list[str]:
+def modify_exif(input_path: str, out_dir: str) -> str:
     """
-    Open the image, generate a few thumbnails, save them under static/processed,
-    and return the list of saved file paths.
+    Reads the JPEG at input_path, injects a "UserComment"
+    EXIF tag with a timestamp, and writes it to out_dir.
+    Returns the full path to the new file.
     """
-    img = Image.open(image_path)
-    base, ext = os.path.splitext(os.path.basename(image_path))
+    # Load image & existing EXIF
+    img = Image.open(input_path)
+    exif_dict = piexif.load(img.info.get("exif", b""))
 
-    # define your variants here
-    sizes = {
-        "thumb": (150, 150),
-        "medium": (400, 400),
-        "large": (800, 800),
-    }
+    # Add/update a UserComment
+    from datetime import datetime
+    comment = f"Processed on {datetime.utcnow().isoformat()}Z"
+    exif_dict["Exif"][piexif.ExifIFD.UserComment] = piexif.helper.UserComment.dump(
+        comment, encoding="unicode"
+    )
 
-    output_paths = []
-    for suffix, (w, h) in sizes.items():
-        variant = img.copy()
-        variant.thumbnail((w, h))
-        filename = f"{base}_{suffix}{ext}"
-        out_path = os.path.join("static/processed", filename)
-        variant.save(out_path)
-        output_paths.append(out_path)
+    # Build output filename
+    filename = os.path.basename(input_path)
+    out_path = os.path.join(out_dir, f"meta_{filename}")
 
-    return output_paths
+    # Export with new EXIF
+    exif_bytes = piexif.dump(exif_dict)
+    img.save(out_path, "jpeg", exif=exif_bytes)
+    return out_path
