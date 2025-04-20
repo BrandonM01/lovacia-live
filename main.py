@@ -1,15 +1,13 @@
-# main.py
-
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from image_processing import process_image
-# from video_processing import process_video  # ← leave commented for now
+from video_processing import process_video
 
 app = FastAPI()
 
 @app.head("/")
 async def healthcheck():
-    return {"status": "Service is running"}
+    return {"status": "ok"}
 
 @app.post("/process-image/")
 async def process_image_endpoint(
@@ -31,24 +29,22 @@ async def process_image_endpoint(
         contrast_max=contrast_max,
         count=count,
     )
-    # return file
     return FileResponse(out_path, media_type="image/jpeg", filename=out_path.split("/")[-1])
 
-# --- when you switch to Docker+paid, uncomment and use this ---
-# @app.post("/process-video/")
-# async def process_video_endpoint(
-#     file: UploadFile = File(...),
-#     trim_start: float = Form(0.0),
-#     trim_end: float = Form(0.0),
-#     flip: bool = Form(False),
-# ):
-#     in_path = f"/tmp/{file.filename}"
-#     with open(in_path, "wb") as f:
-#         f.write(await file.read())
-#     out_path = process_video(
-#         input_path=in_path,
-#         trim_start=trim_start,
-#         trim_end=trim_end,
-#         flip=flip,
-#     )
-#     return FileResponse(out_path, media_type="video/mp4", filename=out_path.split("/")[-1])
+@app.post("/process-video/")
+async def process_video_endpoint(
+    file: UploadFile = File(...),
+    trim_start: float = Form(0.0),
+    trim_end: float = Form(0.0),
+    flip: bool = Form(False),
+):
+    in_path = f"/tmp/{file.filename}"
+    with open(in_path, "wb") as f:
+        f.write(await file.read())
+    out_path = process_video(
+        input_path=in_path,
+        trim_start=trim_start,
+        trim_end=trim_end,
+        flip=flip,
+    )
+    return FileResponse(out_path, media_type="video/mp4", filename=out_path.split("/")[-1])
