@@ -1,18 +1,23 @@
-import os, random
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageOps
+import os
+from typing import List
 
-def process_image_variants(path, base, ext, count, cmin, cmax, flip):
-    out = []
-    img0 = Image.open(path)
-    for i in range(1, count+1):
-        img = img0.copy()
-        # contrast
-        c = random.uniform(cmin, cmax)
-        img = ImageEnhance.Contrast(img).enhance(1 + c/100)
-        # flip
-        if flip:
-            img = img.transpose(Image.FLIP_LEFT_RIGHT)
-        fname = f"{base}_img{i}{ext}"
-        img.save(os.path.join("uploads", fname))
-        out.append(fname)
-    return out
+def process_image_variants(input_path: str) -> List[str]:
+    """
+    Given an input image, produce two variants:
+      1) grayscale
+      2) mirrored
+    Returns list of output file paths.
+    """
+    img = Image.open(input_path)
+    base, ext = os.path.splitext(input_path)
+
+    # 1) grayscale
+    gray_path = f"{base}_gray{ext}"
+    img.convert("L").save(gray_path)
+    
+    # 2) mirrored
+    mirror_path = f"{base}_mirror{ext}"
+    ImageOps.mirror(img).save(mirror_path)
+
+    return [gray_path, mirror_path]
