@@ -1,41 +1,32 @@
-<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Lovacia Bot</title>
-  <link rel="stylesheet" href="{{ request.url_for('static', path='app.css') }}"/>
+  <link rel="stylesheet" href="{{ request.url_for('static', path='app.css') }}">
 </head>
 <body>
-  <h1 style="text-align:center">Lovacia Bot</h1>
+  <h1>Lovacia Bot</h1>
+
+  <h2>Image Processing</h2>
   <form action="/process-image/" method="post" enctype="multipart/form-data">
-    <label>
-      Select image:
-      <input type="file" name="file" accept="image/*" required/>
-    </label>
-    <label>
-      Batch size:
-      <select name="count">
-        <option>5</option><option>10</option><option>25</option><option>50</option>
-      </select>
-    </label>
-    <label>
-      Contrast Min (%):
-      <input type="number" name="contrast_min" value="-5.0" step="0.1"/>
-    </label>
-    <label>
-      Contrast Max (%):
-      <input type="number" name="contrast_max" value="5.0" step="0.1"/>
-    </label>
-    <label>
-      Flip horizontally:
-      <input type="checkbox" name="flip"/>
-    </label>
-    <button type="submit">Upload & Process</button>
+    <input type="file" name="file" accept="image/*" required/>
+    Batch size:
+    <select name="count"><option>5</option><option>10</option><option>25</option><option>50</option></select>
+    Min contrast: <input type="number" name="contrast_min" value="-5.0" step="0.1"/>
+    Max contrast: <input type="number" name="contrast_max" value="5.0" step="0.1"/>
+    Flip: <input type="checkbox" name="flip"/>
+    <button type="submit">Go</button>
   </form>
 
-  <div id="currentBatch"><h2>Current Batch</h2></div>
-  <div id="history"><h2>History</h2></div>
+  <h2>Video Processing</h2>
+  <form action="/process-video/" method="post" enctype="multipart/form-data">
+    <input type="file" name="file" accept="video/*" required/>
+    Trim start (s): <input type="number" name="trim_start" value="0" step="0.1"/>
+    Trim end (s):   <input type="number" name="trim_end" value="0" step="0.1"/>
+    Flip: <input type="checkbox" name="flip"/>
+    <button type="submit">Go</button>
+  </form>
 </body>
 </html>
