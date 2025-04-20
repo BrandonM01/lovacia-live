@@ -1,36 +1,28 @@
 import os
-import subprocess
-from typing import List
+from moviepy.editor import VideoFileClip, vfx
 
-def process_video_variants(input_path: str) -> List[str]:
+def process_video_variants(video_path: str, output_dir: str) -> list[str]:
     """
-    Given an input video file, produces two variants:
-      1) horizontally flipped
-      2) slowed down (50% speed)
-    Returns a list of output file paths.
+    Load the clip and write out two variants:
+      1) slowed down x0.5
+      2) rotated 90°
+    Returns the list of output file paths.
     """
-    out_files = []
-    base, ext = os.path.splitext(input_path)
+    clip = VideoFileClip(video_path)
+    name = os.path.splitext(os.path.basename(video_path))[0]
 
-    # 1) horizontal flip
-    hflip = f"{base}_hflip{ext}"
-    subprocess.run([
-        "ffmpeg", "-y", "-i", input_path,
-        "-vf", "hflip",
-        hflip
-    ], check=True)
-    out_files.append(hflip)
+    variants: list[str] = []
 
-    # 2) half‑speed (slow down)
-    slow = f"{base}_half_speed{ext}"
-    # for video: setpts=2*PTS, for audio: atempo=0.5
-    subprocess.run([
-        "ffmpeg", "-y", "-i", input_path,
-        "-filter_complex",
-        "[0:v]setpts=2.0*PTS[v];[0:a]atempo=0.5[a]",
-        "-map", "[v]", "-map", "[a]",
-        slow
-    ], check=True)
-    out_files.append(slow)
+    # slow motion
+    slow = clip.fx(vfx.speedx, factor=0.5)
+    slow_path = os.path.join(output_dir, f"{name}_slow.mp4")
+    slow.write_videofile(slow_path, audio_codec="aac")
+    variants.append(slow_path)
 
-    return out_files
+    # rotated
+    rot = clip.fx(vfx.rotate, 90)
+    rot_path = os.path.join(output_dir, f"{name}_rotated.mp4")
+    rot.write_videofile(rot_path, audio_codec="aac")
+    variants.append(rot_path)
+
+    return variants
