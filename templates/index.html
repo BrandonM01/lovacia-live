@@ -11,22 +11,21 @@
 
   <h2>Image Processing</h2>
   <form action="/process-image/" method="post" enctype="multipart/form-data">
-    <input type="file" name="file" accept="image/*" required/>
-    Batch size:
-    <select name="count"><option>5</option><option>10</option><option>25</option><option>50</option></select>
-    Min contrast: <input type="number" name="contrast_min" value="-5.0" step="0.1"/>
-    Max contrast: <input type="number" name="contrast_max" value="5.0" step="0.1"/>
-    Flip: <input type="checkbox" name="flip"/>
-    <button type="submit">Go</button>
+    <input type="file" name="file" accept="image/*" required>
+    Batch: <select name="count"><option>5</option><option>10</option></select>
+    Min C: <input type="number" name="contrast_min" value="-5" step="0.1">
+    Max C: <input type="number" name="contrast_max" value="5" step="0.1">
+    Flip: <input type="checkbox" name="flip">
+    <button type="submit">Run</button>
   </form>
 
   <h2>Video Processing</h2>
   <form action="/process-video/" method="post" enctype="multipart/form-data">
-    <input type="file" name="file" accept="video/*" required/>
-    Trim start (s): <input type="number" name="trim_start" value="0" step="0.1"/>
-    Trim end (s):   <input type="number" name="trim_end" value="0" step="0.1"/>
-    Flip: <input type="checkbox" name="flip"/>
-    <button type="submit">Go</button>
+    <input type="file" name="file" accept="video/*" required>
+    Trim Start (s): <input type="number" name="trim_start" value="0" step="0.1">
+    Trim End (s):   <input type="number" name="trim_end" value="0" step="0.1">
+    Flip: <input type="checkbox" name="flip">
+    <button type="submit">Run</button>
   </form>
 </body>
 </html>
