@@ -1,23 +1,18 @@
+import os, random
 from PIL import Image, ImageEnhance
 
-def process_image(
-    path: str,
-    flip: bool = False,
-    contrast_min: float = -20.0,
-    contrast_max: float = 20.0
-) -> str:
-    # open & optionally flip
-    img = Image.open(path)
-    if flip:
-        img = img.transpose(Image.FLIP_LEFT_RIGHT)
-
-    # adjust contrast
-    enhancer = ImageEnhance.Contrast(img)
-    # map contrast_min..contrast_max (percent) to a factor around 1.0
-    factor = 1 + ((contrast_max - contrast_min) / 100.0)
-    img = enhancer.enhance(factor)
-
-    # save output
-    output = "processed_image.jpg"
-    img.save(output, "JPEG")
-    return output
+def process_image_variants(path, base, ext, count, cmin, cmax, flip):
+    out = []
+    img0 = Image.open(path)
+    for i in range(1, count+1):
+        img = img0.copy()
+        # contrast
+        c = random.uniform(cmin, cmax)
+        img = ImageEnhance.Contrast(img).enhance(1 + c/100)
+        # flip
+        if flip:
+            img = img.transpose(Image.FLIP_LEFT_RIGHT)
+        fname = f"{base}_img{i}{ext}"
+        img.save(os.path.join("uploads", fname))
+        out.append(fname)
+    return out
