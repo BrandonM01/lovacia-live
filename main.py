@@ -1,84 +1,80 @@
 import os
-import traceback
-from fastapi import FastAPI, Request, UploadFile, File
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request, File, UploadFile
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from starlette.templating import Jinja2Templates
 
-from image_processing import process_image
+from image_processing import process_image_variants
 from video_processing import process_video_variants
 
-# --- Configuration --------------------------------------------------------
-
-UPLOAD_DIR    = "static/uploads"
+# where we save uploads & outputs
+UPLOAD_DIR = "static/uploads"
 PROCESSED_DIR = "static/processed"
-THUMB_DIR     = "static/thumbs"
-TEMPLATE_DIR  = "templates"
 
-# --- App setup ------------------------------------------------------------
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(PROCESSED_DIR, exist_ok=True)
 
 app = FastAPI()
 
-# mount static folder so /static/... serves files
+# serve /static/**
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# set up Jinja2 templates
-templates = Jinja2Templates(directory=TEMPLATE_DIR)
+# templates lives under templates/
+templates = Jinja2Templates(directory="templates")
 
-# ensure our directories exist
-for d in (UPLOAD_DIR, PROCESSED_DIR, THUMB_DIR):
-    os.makedirs(d, exist_ok=True)
-
-# --- Routes ---------------------------------------------------------------
 
 @app.get("/")
 async def index(request: Request):
-    # list thumbnails in your thumb folder to show history/gallery
-    thumbs = sorted(os.listdir(THUMB_DIR))
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "thumbs": thumbs,
-    })
+    """
+    Home page: renders your upload form.
+    """
+    return templates.TemplateResponse("index.html", {"request": request})
+
 
 @app.post("/process-image")
 async def upload_image(request: Request, file: UploadFile = File(...)):
-    try:
-        # save raw upload
-        raw_path = os.path.join(UPLOAD_DIR, file.filename)
-        with open(raw_path, "wb") as f:
-            f.write(await file.read())
+    """
+    1. Save the incoming image to UPLOAD_DIR
+    2. Run through all your PIL variants
+    3. Render a gallery template with the new URLs
+    """
+    # save raw upload
+    raw_path = os.path.join(UPLOAD_DIR, file.filename)
+    with open(raw_path, "wb") as out:
+        out.write(await file.read())
 
-        # run your existing image pipeline
-        out_files = process_image(raw_path)  
-        # process_image() should return a list of output file paths or URLs
+    # process & get back list of filepaths under static/processed
+    out_paths = process_image_variants(raw_path)
 
-        return {"processed": out_files}
+    # convert to URLs for the template
+    urls = [f"/static/processed/{os.path.basename(p)}" for p in out_paths]
 
-    except Exception as e:
-        # print full Python traceback into the Render log
-        traceback.print_exc()
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(e)}
-        )
+    return templates.TemplateResponse(
+        "gallery.html",
+        {
+            "request": request,
+            "images": urls,
+        },
+    )
+
 
 @app.post("/process-video")
-async def upload_video(request: Request, file: UploadFile = File(...)):
-    try:
-        # save raw upload
-        raw_path = os.path.join(UPLOAD_DIR, file.filename)
-        with open(raw_path, "wb") as f:
-            f.write(await file.read())
+async def upload_video(file: UploadFile = File(...)):
+    """
+    1. Save the incoming video to UPLOAD_DIR
+    2. Run through your moviepy variants
+    3. Return the first processed file directly
+    """
+    raw_path = os.path.join(UPLOAD_DIR, file.filename)
+    with open(raw_path, "wb") as out:
+        out.write(await file.read())
 
-        # NOTE: process_video_variants now only takes 1 argument
-        variants = process_video_variants(raw_path)
-        # variants should be a dict or list describing your different video outputs
+    out_paths = process_video_variants(raw_path, PROCESSED_DIR)
 
-        return {"variants": variants}
-
-    except Exception as e:
-        traceback.print_exc()
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(e)}
-        )
+    # serve the first variant back
+    first = out_paths[0]
+    return FileResponse(
+        first,
+        media_type="video/mp4",
+        filename=os.path.basename(first),
+    )
