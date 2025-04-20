@@ -1,28 +1,56 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Lovacia Live Upload</title>
-    <link rel="stylesheet" href="/static/app.css">
-  </head>
-  <body>
-    <h1>Lovacia Live</h1>
-    <section>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Lovacia Live</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <h1>Lovacia Live</h1>
+
+  <!-- Forms -->
+  <div class="upload-forms">
+    <form id="img-form" action="/process-image" method="post" enctype="multipart/form-data">
       <h2>Upload Image</h2>
-      <form id="img-form" action="/upload-image/" method="post" enctype="multipart/form-data">
-        <input type="file" name="file" accept="image/*" required>
-        <button type="submit">Upload & Process Image</button>
-      </form>
-    </section>
-    <section>
+      <input type="file" name="file" required>
+      <button type="submit">Upload &amp; Process Image</button>
+    </form>
+
+    <form id="vid-form" action="/process-video" method="post" enctype="multipart/form-data">
       <h2>Upload Video</h2>
-      <form id="vid-form" action="/upload-video/" method="post" enctype="multipart/form-data">
-        <input type="file" name="file" accept="video/*" required>
-        <button type="submit">Upload & Process Video</button>
-      </form>
-    </section>
-    <script>
-      // Optional: you can intercept form submits and show results inline via Fetch().
-    </script>
-  </body>
+      <input type="file" name="file" required>
+      <button type="submit">Upload &amp; Process Video</button>
+    </form>
+  </div>
+
+  <!-- Spinner -->
+  <div id="spinner" class="spinner hidden"></div>
+
+  <!-- Gallery -->
+  <h2>History / Gallery</h2>
+  <div class="gallery">
+    {% for file in gallery %}
+      {% if file.lower().endswith(('.png','.jpg','.jpeg','.gif')) %}
+        <a href="/static/processed/{{ file }}" target="_blank">
+          <img src="/static/processed/{{ file }}" alt="{{ file }}">
+        </a>
+      {% elif file.lower().endswith(('.mp4','.webm')) %}
+        <a href="/static/processed/{{ file }}" target="_blank">
+          <video src="/static/processed/{{ file }}" muted loop></video>
+        </a>
+      {% endif %}
+    {% else %}
+      <p>No processed files yet.</p>
+    {% endfor %}
+  </div>
+
+  <script>
+    const spinner = document.getElementById('spinner');
+    document.querySelectorAll('form').forEach(f => {
+      f.addEventListener('submit', () => {
+        spinner.classList.remove('hidden');
+      });
+    });
+  </script>
+</body>
 </html>
