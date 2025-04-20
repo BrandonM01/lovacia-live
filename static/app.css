@@ -1,51 +1,30 @@
 body {
-  max-width: 800px;
-  margin: auto;
-  padding: 2rem;
   font-family: sans-serif;
+  margin: 2rem;
 }
-.title {
-  text-align: center;
-  margin-bottom: 1rem;
+h1, h2 {
+  margin-bottom: 0.5rem;
 }
-.field {
-  margin: 1rem 0;
+section {
+  margin-bottom: 2rem;
 }
-label {
-  display: inline-block;
-  margin-right: 1rem;
-}
-input, select, button {
-  margin-left: .5rem;
-}
-.gallery {
+form {
   display: flex;
   flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
 }
-.gallery img {
-  max-width: 120px;
-  margin: .5rem;
-  border: 1px solid #ccc;
-}
-
-/* spinner overlay */
-#spinnerOverlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(255,255,255,0.8);
+label {
   display: flex;
   align-items: center;
-  justify-content: center;
-  z-index: 999;
+  gap: 0.25rem;
 }
-.spinner {
-  width: 64px;
-  height: 64px;
-  border: 8px solid #ddd;
-  border-top-color: #007bff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+button {
+  padding: 0.5rem 1rem;
 }
-@keyframes spin {
-  to { transform: rotate(360deg); }
+#image-result img,
+#video-result video {
+  margin-top: 1rem;
+  max-width: 100%;
+  display: block;
 }
