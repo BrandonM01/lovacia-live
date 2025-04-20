@@ -1,17 +1,23 @@
 from PIL import Image, ImageEnhance
 
 def process_image(
-    input_path: str,
+    path: str,
     flip: bool = False,
-    contrast_min: float = 0.8,
-    contrast_max: float = 1.2,
+    contrast_min: float = -20.0,
+    contrast_max: float = 20.0
 ) -> str:
-    im = Image.open(input_path)
+    # open & optionally flip
+    img = Image.open(path)
     if flip:
-        im = im.transpose(Image.FLIP_LEFT_RIGHT)
-    enhancer = ImageEnhance.Contrast(im)
-    factor = (contrast_min + contrast_max) / 2
-    im = enhancer.enhance(factor)
-    output_path = "processed_image.jpg"
-    im.save(output_path, format="JPEG")
-    return output_path
+        img = img.transpose(Image.FLIP_LEFT_RIGHT)
+
+    # adjust contrast
+    enhancer = ImageEnhance.Contrast(img)
+    # map contrast_min..contrast_max (percent) to a factor around 1.0
+    factor = 1 + ((contrast_max - contrast_min) / 100.0)
+    img = enhancer.enhance(factor)
+
+    # save output
+    output = "processed_image.jpg"
+    img.save(output, "JPEG")
+    return output
