@@ -1,29 +1,24 @@
 import os
+import datetime
 import piexif
 from PIL import Image
 
-def modify_exif(input_path: str, out_dir: str) -> str:
-    """
-    Reads the JPEG at input_path, injects a "UserComment"
-    EXIF tag with a timestamp, and writes it to out_dir.
-    Returns the full path to the new file.
-    """
-    # Load image & existing EXIF
-    img = Image.open(input_path)
-    exif_dict = piexif.load(img.info.get("exif", b""))
-
-    # Add/update a UserComment
-    from datetime import datetime
-    comment = f"Processed on {datetime.utcnow().isoformat()}Z"
-    exif_dict["Exif"][piexif.ExifIFD.UserComment] = piexif.helper.UserComment.dump(
-        comment, encoding="unicode"
-    )
-
-    # Build output filename
-    filename = os.path.basename(input_path)
-    out_path = os.path.join(out_dir, f"meta_{filename}")
-
-    # Export with new EXIF
+def process_image(raw_path: str, processed_dir: str) -> str:
+    # Load existing EXIF (or get empty dict if none)
+    exif_dict = piexif.load(raw_path)
+    # Update the DateTimeOriginal tag to now
+    now_str = datetime.datetime.now().strftime("%Y:%m:%d %H:%M:%S")
+    exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal] = now_str.encode("utf-8")
+    # Dump back to bytes
     exif_bytes = piexif.dump(exif_dict)
-    img.save(out_path, "jpeg", exif=exif_bytes)
-    return out_path
+
+    # Build output path
+    base, ext = os.path.splitext(os.path.basename(raw_path))
+    out_name = f"{base}_processed{ext}"
+    out_path = os.path.join(processed_dir, out_name)
+
+    # Save with new EXIF
+    img = Image.open(raw_path)
+    img.save(out_path, exif=exif_bytes)
+
+    return out_name
