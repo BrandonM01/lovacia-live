@@ -1,55 +1,52 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Lovacia Live</title>
-  <link rel="stylesheet" href="/static/app.css">
+  <meta charset="UTF-8">
+  <title>Lovacia Live – Image EXIF Changer</title>
+  <link rel="stylesheet" href="/static/app.css" />
+  <style>
+    body { font-family: sans-serif; padding: 1rem; }
+    #preview { margin-top: 1rem; max-width: 300px; }
+  </style>
 </head>
 <body>
-  <h1>Lovacia Live</h1>
+  <h1>Image Metadata Changer</h1>
 
-  <!-- Forms -->
-  <div class="upload-forms">
-    <form id="img-form" action="/process-image" method="post" enctype="multipart/form-data">
-      <h2>Upload Image</h2>
-      <input type="file" name="file" required>
-      <button type="submit">Upload &amp; Process Image</button>
-    </form>
+  <form id="uploadForm">
+    <input type="file" name="file" accept="image/jpeg" required />
+    <button type="submit">Upload &amp; Modify EXIF</button>
+  </form>
 
-    <form id="vid-form" action="/process-video" method="post" enctype="multipart/form-data">
-      <h2>Upload Video</h2>
-      <input type="file" name="file" required>
-      <button type="submit">Upload &amp; Process Video</button>
-    </form>
-  </div>
-
-  <!-- Spinner -->
-  <div id="spinner" class="spinner hidden"></div>
-
-  <!-- Gallery -->
-  <h2>History / Gallery</h2>
-  <div class="gallery">
-    {% for file in gallery %}
-      {% if file.lower().endswith(('.png','.jpg','.jpeg','.gif')) %}
-        <a href="/static/processed/{{ file }}" target="_blank">
-          <img src="/static/processed/{{ file }}" alt="{{ file }}">
-        </a>
-      {% elif file.lower().endswith(('.mp4','.webm')) %}
-        <a href="/static/processed/{{ file }}" target="_blank">
-          <video src="/static/processed/{{ file }}" muted loop></video>
-        </a>
-      {% endif %}
-    {% else %}
-      <p>No processed files yet.</p>
-    {% endfor %}
-  </div>
+  <img id="preview" src="" alt="" style="display: none;" />
 
   <script>
-    const spinner = document.getElementById('spinner');
-    document.querySelectorAll('form').forEach(f => {
-      f.addEventListener('submit', () => {
-        spinner.classList.remove('hidden');
-      });
+    const form = document.getElementById('uploadForm');
+    const preview = document.getElementById('preview');
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const fileInput = form.querySelector('input[type=file]');
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const fd = new FormData();
+      fd.append('file', file);
+
+      preview.style.display = 'none';
+      preview.src = '';
+
+      try {
+        const res = await fetch('/process-image', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (res.ok && data.processed_image_url) {
+          preview.src = data.processed_image_url;
+          preview.style.display = 'block';
+        } else {
+          alert("Error: " + (data.detail||"Unknown"));
+        }
+      } catch(err) {
+        alert("Upload failed: " + err);
+      }
     });
   </script>
 </body>
